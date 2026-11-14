@@ -62,7 +62,60 @@ body{background:#000;color:#fff;height:100vh;overflow:hidden}
 <div id="page-you" class="page"><div class="top"><div class="iconBtn" onclick="searchSettings()">🔍</div><div class="title" style="flex:1;text-align:center" id="youTitle">Da Demon Hub</div><div style="display:flex;gap:8px"><div class="iconBtn" onclick="showPage('page-qr')">▦</div><div class="iconBtn" onclick="showPage('page-profileEdit')">✏️</div></div></div><div style="flex:1;overflow:auto;padding-bottom:80px"><div style="text-align:center;padding:14px"><div style="background:#1c1e21;padding:8px 14px;border-radius:20px;display:inline-block;font-size:13px;color:#8696a0">😊 Express yourself in emoji!</div><div style="margin-top:12px"><div class="avatar" style="width:100px;height:100px;margin:0 auto;font-size:40px" id="youAvatar">👤</div><h3 style="margin-top:10px" id="youName2">Da Demon Hub</h3></div></div><div id="youSettingsList"></div></div><div class="bottom"><div class="navItem" onclick="goBottom('status')"><div>⭕</div>Status</div><div class="navItem" onclick="goBottom('calls')"><div>📞</div>Calls</div><div class="navItem" onclick="goBottom('groups')"><div>👥</div>Groups</div><div class="navItem" onclick="goBottom('chats')"><div>💬</div>Chats</div><div class="navItem active"><div>👤</div>You</div></div></div>
 
 <!-- PROFILE EDIT - FULLY FIXED LIKE WHATSAPP -->
-<div id="page-profileEdit" class="page"><div class="top"><div class="back" onclick="showPage('page-you')">‹</div><div class="title" style="flex:1;text-align:center">Profile</div><div style="width:28px"></div></div><div style="flex:1;overflow:auto"><div style="text-align:center;padding:20px"><div class="avatar" style="width:130px;height:130px;margin:0 auto" id="editAvatar" onclick="changePhoto()">👤</div><div style="color:#5f2ee0;margin-top:12px;cursor:pointer;font-weight:700" onclick="changePhoto()">Edit photo • Camera / Gallery</div><div style="font-size:11px;color:#555;margin-top:4px">Tap to change - saved to DDchat only</div></div><div class="card"><div class="row" onclick="editField('name')"><b>Name</b><span id="pName" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Da Demon Hub</span><span>›</span></div><div class="row" onclick="editField('about')"><b>About</b><span id="pAbout" style="color:#5f2ee0;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">😁 Today in emoji...</span><span>›</span></div><div class="row" onclick="editField('username')"><b>Username</b><span id="pUsername" style="color:#5f2ee0">Reserve username...</span><span>›</span></div><div class="row" onclick="editField('phone')"><b>Phone number</b><span id="pPhone">Add number (private)</span><span>›</span></div><div class="row" onclick="editField('links')"><b>Links</b><span id="pLinks" style="color:#5f2ee0">Add links (public)</span><span>›</span></div></div><div class="label">Your links (public on your profile)</div><div id="linksPreview" class="card" style="display:none"></div></div></div>
+<div id="page-profileEdit" class="page"><div class="top"><div class="back" onclick="showPage('page-you')">‹</div><div class="title" style="flex:1;text-align:center">Profile</div><div style="width:28px"></div></div><div style="flex:1;overflow:auto"><div style="text-align:center;padding:20px"><div class="avatar" style="width:130px;height:130px;margin:0 auto" id="editAvatar" onclick="changePhoto()">👤</div><div style="color:#5f2ee0;margin-top:12px;cursor:pointer;font-weight:700" onclick="changePhoto()">Edit photo • Camera / Gallery</div><div style="font-size:11px;color:#555;margin-top:4px">Tap to change - saved to DDchat only</div></div><div class="card"><div class="row" onclick="editField('name')"><b>Name</b><span id="pName" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Da Demon Hub</span><span>›</span></div><div class="row" onclick="editField('about')"><b>About</b><span id="pAbout" style="color:#5f2ee0;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">😁 Today in emoji...</span><span>›</span></div><div class="row" onclick="editField('username')"><b>Username</b><span id="pUsername" style="color:#5f2ee0">Reserve username...</span><span>›</span></div><div class="row" onclick="editField('phone')"><b>Phone number</b><span id="pPhone">Add number (private)</span><span>›</span></div><div class="row" onclick="editField('gmail')"><b>Gmail</b><span id="pGmail">Add gmail (private)</span><span>›</span></div><div class="row" onclick="copyDDId()"><b>DD ID</b><span id="pDDId" style="color:#5f2ee0">DD-00000</span><span>›</span></div><div class="row" onclick="editField('links')"><b>Links</b><span id="pLinks" style="color:#5f2ee0">Add links (public)</span><span>›</span></div></div><div class="label">Your links (public on your profile)</div><div id="linksPreview" class="card" style="display:none"></div></div></div>
+
+<script>
+// FIX CODES INSIDE - does not touch your other codes
+(function(){
+  // make sure curUser exists
+  if(!window.curUser){
+    let saved = localStorage.getItem('dd_curUser');
+    if(saved) window.curUser = JSON.parse(saved);
+    else window.curUser = {id:'DD-'+Math.floor(10000+Math.random()*90000), name:'Da Demon Hub'};
+  }
+
+  // original editField - keep it, just extend for gmail
+  let originalEditField = window.editField;
+  window.editField = function(type){
+    if(type==='gmail'){
+      let email = prompt('Enter Gmail (private, for login):', window.curUser.email||'');
+      if(email===null) return;
+      window.curUser.email = email.toLowerCase();
+      localStorage.setItem('dd_curUser', JSON.stringify(window.curUser));
+      // save to all users list
+      let users = JSON.parse(localStorage.getItem('dd_all_users')||'[]');
+      let idx = users.findIndex(u=>u.id===window.curUser.id);
+      if(idx>-1){ users[idx].email=window.curUser.email; } else { users.push(window.curUser); }
+      localStorage.setItem('dd_all_users', JSON.stringify(users));
+      document.getElementById('pGmail').innerText = email || 'Add gmail (private)';
+      if(email) document.getElementById('pGmail').style.color='#111';
+      return;
+    }
+    if(originalEditField) return originalEditField(type);
+  };
+
+  window.copyDDId = function(){
+    let id = window.curUser.id;
+    navigator.clipboard.writeText(id).then(()=>alert('Copied: '+id)).catch(()=>prompt('Copy your DD ID:', id));
+  };
+
+  // auto-fill when page opens
+  function fillProfile(){
+    if(!window.curUser) return;
+    let pGmail = document.getElementById('pGmail');
+    let pDDId = document.getElementById('pDDId');
+    let pPhone = document.getElementById('pPhone');
+    let pName = document.getElementById('pName');
+    if(pName && window.curUser.name) pName.innerText = window.curUser.name;
+    if(pPhone && window.curUser.phone){ pPhone.innerText = window.curUser.phone; pPhone.style.color='#111'; }
+    if(pGmail && window.curUser.email){ pGmail.innerText = window.curUser.email; pGmail.style.color='#111'; }
+    if(pDDId) pDDId.innerText = window.curUser.id;
+  }
+  // run now and on page show
+  fillProfile();
+  setInterval(fillProfile, 1000);
+})();
+</script>
 
 <div id="page-qr" class="page"><div class="top"><div class="back" onclick="showPage('page-you')">✕</div><div class="title" style="flex:1;text-align:center">QR Code</div><div class="iconBtn" onclick="shareQR()">↗️</div></div><div style="flex:1;padding:20px;text-align:center"><h3 id="qrName">Da Demon Hub</h3><div id="qrBox" style="width:260px;height:260px;background:#fff;margin:20px auto;border-radius:12px;display:grid;place-items:center;color:#000;padding:10px"><img id="qrImg" src="" style="width:200px;height:200px"><div><span id="qrId">DD-48392</span><br><small style="color:#555">Scan to add me on DDchat</small></div></div><button class="btn" onclick="saveQR()">Save QR</button><button class="btn" style="background:#2a3942" onclick="resetQR()">Reset QR</button><button class="btn" style="background:#2a3942" onclick="logout()">Logout (Switch account)</button></div></div>
 <div id="page-generic" class="page"><div class="top"><div class="back" onclick="showPage('page-you')">‹</div><div class="title" style="flex:1;text-align:center" id="gTitle">Title</div><div style="width:28px"></div></div><div id="gBody" style="flex:1;overflow:auto;padding:12px"></div></div>
