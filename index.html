@@ -139,7 +139,10 @@ setTimeout(loadProfile,100);
 function editField(f){
   curField=f;
   document.getElementById('fieldTitle').innerText='Edit '+f.toUpperCase();
-  document.getElementById('fieldInput').value=localStorage.getItem('dd_'+f)||'';
+  let current = document.getElementById('p'+f.charAt(0).toUpperCase()+f.slice(1));
+  let val = current ? current.innerText : '';
+  if(val.includes('Add ') || val.includes('Reserve')) val = '';
+  document.getElementById('fieldInput').value = val;
   document.getElementById('page-fieldEdit').style.display='flex';
   document.getElementById('fieldInput').focus();
 }
@@ -167,13 +170,12 @@ function closeAboutPage(){ document.getElementById('page-aboutEdit').style.displ
 function saveAboutReal(){
   let t=document.getElementById('aboutInput').value.trim()||curAboutText;
   let e=document.getElementById('aboutEmoji').innerText;
-  localStorage.setItem('dd_about',e+' '+t); localStorage.setItem('dd_about_emoji',e); localStorage.setItem('dd_about_text',t);
   curAboutText=t; curAboutEmoji=e;
   document.getElementById('pAbout').innerText=e+' '+t;
   closeAboutPage();
 }
 function togglePrivacy(){ let m=document.getElementById('privacyMenu'); m.style.display=m.style.display==='none'?'block':'none'; }
-function setPrivacy(v){ curPrivacy=v; localStorage.setItem('dd_privacy',v); document.getElementById('aboutPrivacyLabel').innerText=v; document.getElementById('privacyMenu').style.display='none'; }
+function setPrivacy(v){ curPrivacy=v; document.getElementById('aboutPrivacyLabel').innerText=v; document.getElementById('privacyMenu').style.display='none'; }
 </script>
 
 <style>
