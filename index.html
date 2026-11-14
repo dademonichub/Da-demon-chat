@@ -122,10 +122,9 @@ body{background:#000;color:#fff;height:100vh;overflow:hidden}
 
 <script>
 let curField = '';
-let curAboutText = localStorage.getItem('dd_about') || 'At work';
-let curAboutEmoji = localStorage.getItem('dd_about_emoji') || '💼';
-let curPrivacy = localStorage.getItem('dd_privacy') || 'My contacts';
-
+let curAboutText = 'At work';
+let curAboutEmoji = '💼';
+let curPrivacy = 'My contacts';
 const aboutList = [{e:'💼',t:'At work'},{e:'😊',t:'Available'},{e:'🔋',t:'Battery about to die'},{e:'😴',t:'Busy'},{e:'✈️',t:'At the airport'},{e:'🎬',t:'At the movies'},{e:'😁',t:'Today in emoji mood'},{e:'🌙',t:'Sleeping'},{e:'🏋️',t:'At the gym'}];
 
 function loadProfile(){
