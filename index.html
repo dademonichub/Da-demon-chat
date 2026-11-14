@@ -62,8 +62,203 @@ body{background:#000;color:#fff;height:100vh;overflow:hidden}
 <div id="page-you" class="page"><div class="top"><div class="iconBtn" onclick="searchSettings()">🔍</div><div class="title" style="flex:1;text-align:center" id="youTitle">Da Demon Hub</div><div style="display:flex;gap:8px"><div class="iconBtn" onclick="showPage('page-qr')">▦</div><div class="iconBtn" onclick="showPage('page-profileEdit')">✏️</div></div></div><div style="flex:1;overflow:auto;padding-bottom:80px"><div style="text-align:center;padding:14px"><div style="background:#1c1e21;padding:8px 14px;border-radius:20px;display:inline-block;font-size:13px;color:#8696a0">😊 Express yourself in emoji!</div><div style="margin-top:12px"><div class="avatar" style="width:100px;height:100px;margin:0 auto;font-size:40px" id="youAvatar">👤</div><h3 style="margin-top:10px" id="youName2">Da Demon Hub</h3></div></div><div id="youSettingsList"></div></div><div class="bottom"><div class="navItem" onclick="goBottom('status')"><div>⭕</div>Status</div><div class="navItem" onclick="goBottom('calls')"><div>📞</div>Calls</div><div class="navItem" onclick="goBottom('groups')"><div>👥</div>Groups</div><div class="navItem" onclick="goBottom('chats')"><div>💬</div>Chats</div><div class="navItem active"><div>👤</div>You</div></div></div>
 
 <!-- PROFILE EDIT - FULLY FIXED LIKE WHATSAPP -->
-<div id="page-profileEdit" class="page"><div class="top"><div class="back" onclick="showPage('page-you')">‹</div><div class="title" style="flex:1;text-align:center">Profile</div><div style="width:28px"></div></div><div style="flex:1;overflow:auto"><div style="text-align:center;padding:20px"><div class="avatar" style="width:130px;height:130px;margin:0 auto" id="editAvatar" onclick="changePhoto()">👤</div><div style="color:#5f2ee0;margin-top:12px;cursor:pointer;font-weight:700" onclick="changePhoto()">Edit photo • Camera / Gallery</div><div style="font-size:11px;color:#555;margin-top:4px">Tap to change - saved to DDchat only</div></div><div class="card"><div class="row" onclick="editField('name')"><b>Name</b><span id="pName" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Da Demon Hub</span><span>›</span></div><div class="row" onclick="editField('about')"><b>About</b><span id="pAbout" style="color:#5f2ee0;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">😁 Today in emoji...</span><span>›</span></div><div class="row" onclick="editField('username')"><b>Username</b><span id="pUsername" style="color:#5f2ee0">Reserve username...</span><span>›</span></div><div class="row" onclick="editField('phone')"><b>Phone number</b><span id="pPhone">Add number (private)</span><span>›</span></div><div class="row" onclick="editField('gmail')"><b>Gmail</b><span id="pGmail">Add gmail (private)</span><span>›</span></div><div class="row" onclick="copyDDId()"><b>DD ID</b><span id="pDDId" style="color:#5f2ee0">DD-00000</span><span>›</span></div><div class="row" onclick="editField('links')"><b>Links</b><span id="pLinks" style="color:#5f2ee0">Add links (public)</span><span>›</span></div></div><div class="label">Your links (public on your profile)</div><div id="linksPreview" class="card" style="display:none"></div></div></div>
+<!-- PROFILE PAGE - FIXED -->
+<div id="page-profileEdit" class="page">
+  <div class="top"><div class="back" onclick="showPage('page-you')">‹</div><div class="title" style="flex:1;text-align:center">Profile</div><div style="width:28px"></div></div>
+  <div style="flex:1;overflow:auto">
+    <div style="text-align:center;padding:20px">
+      <div class="avatar" style="width:130px;height:130px;margin:0 auto" id="editAvatar" onclick="changePhoto()">👤</div>
+      <div style="color:#5f2ee0;margin-top:12px;cursor:pointer;font-weight:700" onclick="changePhoto()">Edit photo • Camera / Gallery</div>
+      <div style="font-size:11px;color:#555;margin-top:4px">Tap to change - saved to DDchat only</div>
+    </div>
+    <div class="card">
+      <div class="row" onclick="editField('name')"><b>Name</b><span id="pName" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Da Demon Hub</span><span>›</span></div>
+      <div class="row" onclick="editField('about')"><b>About</b><span id="pAbout" style="color:#5f2ee0;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">At work</span><span>›</span></div>
+      <div class="row" onclick="editField('username')"><b>Username</b><span id="pUsername" style="color:#5f2ee0">Reserve username...</span><span>›</span></div>
+      <div class="row" onclick="editField('phone')"><b>Phone number</b><span id="pPhone">Add number (private)</span><span>›</span></div>
+      <div class="row" onclick="editField('gmail')"><b>Gmail</b><span id="pGmail">Add gmail (private)</span><span>›</span></div>
+      <div class="row" onclick="editField('ddid')"><b>DD ID</b><span id="pDDId" style="color:#5f2ee0">DD-40671</span><span>›</span></div>
+      <div class="row" onclick="editField('links')"><b>Links</b><span id="pLinks" style="color:#5f2ee0">Add links (public)</span><span>›</span></div>
+    </div>
+    <div class="label">Your links (public on your profile)</div>
+    <div id="linksPreview" class="card" style="display:none"></div>
+  </div>
+</div>
 
+<!-- ABOUT PAGE - FIXED, NO TIME PILL, NO WHATSAPP NAME -->
+<div id="page-aboutEdit" class="page" style="display:none;background:#0f0f0f;color:#fff">
+  <div class="top" style="background:#1f1f1f;border:none;padding:10px 14px;display:flex;align-items:center;gap:12px">
+    <div style="font-size:28px;cursor:pointer" onclick="showPage('page-profileEdit')">×</div>
+    <div style="flex:1;display:flex;align-items:center;background:#2a2a2a;border-radius:22px;padding:8px 12px;gap:8px">
+      <span id="aboutEmoji">😁</span>
+      <input id="aboutInput" type="text" placeholder="Type or pick suggestion" style="flex:1;background:transparent;border:none;color:#fff;outline:none;font-size:15px" oninput="updateAboutCount()">
+      <span id="aboutCount" style="font-size:11px;color:#888">0/139</span>
+    </div>
+    <div style="width:36px;height:36px;background:#5f2ee0;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700" onclick="saveAboutReal()">✓</div>
+  </div>
+  
+  <div style="padding:12px 16px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div id="aboutPrivacyBtn" onclick="togglePrivacy()" style="background:#2a2a2a;padding:6px 12px;border-radius:16px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px">
+        <span>◍</span> <span id="aboutPrivacyLabel">My contacts</span> <span>▼</span>
+      </div>
+    </div>
+    <!-- Privacy Menu Real -->
+    <div id="privacyMenu" style="display:none;background:#222;border-radius:12px;margin-top:8px;overflow:hidden">
+      <div class="privacyOpt" onclick="setPrivacy('Everyone')"><span>🌐 Everyone</span><span class="chk"></span></div>
+      <div class="privacyOpt" onclick="setPrivacy('My contacts')"><span>👥 My contacts</span><span class="chk">✓</span></div>
+      <div class="privacyOpt" onclick="setPrivacy('My contacts except...')"><span>👥 My contacts except...</span><span class="chk"></span></div>
+      <div class="privacyOpt" onclick="setPrivacy('Nobody')"><span>🚫 Nobody</span><span class="chk"></span></div>
+    </div>
+  </div>
+
+  <div style="padding:8px 16px;color:#aaa;font-size:12px">Select an About or type your own</div>
+  <div class="card" style="background:#1a1a1a;margin:0 12px;border-radius:12px;overflow:hidden" id="aboutSuggestions"></div>
+  
+  <div style="padding:16px;color:#888;font-size:11px;text-align:center">About saved to DDchat only • Not permanent • Change anytime</div>
+</div>
+
+<style>
+.privacyOpt{display:flex;justify-content:space-between;padding:14px 16px;cursor:pointer;border-bottom:1px solid #333;color:#fff}
+.privacyOpt:active{background:#333}
+.aboutSug{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;cursor:pointer;border-bottom:1px solid #222;color:#fff}
+.aboutSug:active{background:#2a2a2a}
+.aboutSug .tick{color:#5f2ee0;font-weight:700;display:none}
+</style>
+
+<script>
+// STORAGE
+let currentPrivacy = localStorage.getItem('dd_about_privacy') || 'My contacts';
+let currentAbout = localStorage.getItem('dd_about_text') || 'At work';
+let currentEmoji = localStorage.getItem('dd_about_emoji') || '😁';
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  loadAllProfile();
+  buildAboutSuggestions();
+  document.getElementById('aboutPrivacyLabel').innerText = currentPrivacy;
+  document.getElementById('pAbout').innerText = currentEmoji + ' ' + currentAbout;
+});
+
+function loadAllProfile(){
+  ['name','about','username','phone','gmail','ddid','links'].forEach(k=>{
+    let v = localStorage.getItem('dd_'+k);
+    if(v){
+      let el = document.getElementById('p'+k.charAt(0).toUpperCase()+k.slice(1));
+      if(k==='about'){ document.getElementById('pAbout').innerText = v; } 
+      else if(el){ el.innerText = v; }
+    }
+  });
+}
+
+// PROFILE EDIT - ALL NOT PERMANENT
+function editField(field){
+  if(field==='about'){ openAbout(); return; }
+  
+  let current = localStorage.getItem('dd_'+field) || '';
+  let label = field.toUpperCase();
+  let newVal = prompt('Edit '+label+' (saved to DDchat only, change anytime):', current);
+  if(newVal===null) return;
+  if(newVal.trim()===''){
+    localStorage.removeItem('dd_'+field);
+    document.getElementById('p'+field.charAt(0).toUpperCase()+field.slice(1)).innerText = field==='gmail'?'Add gmail (private)':field==='phone'?'Add number (private)':field==='ddid'?'DD-40671':field==='links'?'Add links (public)':field==='username'?'Reserve username...':field==='name'?'Da Demon Hub':'';
+  } else {
+    localStorage.setItem('dd_'+field, newVal.trim());
+    let displayId = 'p'+field.charAt(0).toUpperCase()+field.slice(1);
+    let el = document.getElementById(displayId);
+    if(el) el.innerText = newVal.trim();
+    if(field==='links'){
+      let prev = document.getElementById('linksPreview');
+      prev.style.display='block'; prev.innerHTML='<div style="padding:10px;color:#5f2ee0">'+newVal.trim()+'</div>';
+    }
+  }
+}
+
+function changePhoto(){
+  let url = prompt('Paste image URL or type emoji for profile (DDchat only):');
+  if(!url) return;
+  let av = document.getElementById('editAvatar');
+  if(url.startsWith('http')){ av.innerHTML='<img src="'+url+'" style="width:100%;height:100%;border-radius:50%;object-fit:cover">'; }
+  else { av.innerText=url; }
+  localStorage.setItem('dd_avatar', url);
+}
+
+function copyDDId(){ editField('ddid'); }
+
+// ABOUT LOGIC
+const suggestions = [
+  {e:'💼', t:'At work'}, {e:'😊', t:'Available'}, {e:'🔋', t:'Battery about to die'}, {e:'😴', t:'Busy'}, {e:'✈️', t:'At the airport'}, {e:'🎬', t:'At the movies'}, {e:'🎧', t:'Listening to music'}, {e:'😁', t:'Today in emoji mood'}, {e:'🌙', t:'Sleeping'}, {e:'🏋️', t:'At the gym'}, {e:'❤️', t:'In love'}
+];
+
+function openAbout(){
+  document.getElementById('page-profileEdit').style.display='none';
+  document.getElementById('page-aboutEdit').style.display='flex';
+  document.getElementById('page-aboutEdit').style.flexDirection='column';
+  document.getElementById('aboutInput').value = currentAbout;
+  document.getElementById('aboutEmoji').innerText = currentEmoji;
+  updateAboutCount();
+  buildAboutSuggestions();
+}
+
+function buildAboutSuggestions(){
+  let cont = document.getElementById('aboutSuggestions'); cont.innerHTML='';
+  suggestions.forEach(s=>{
+    let isActive = (s.t===currentAbout);
+    let div = document.createElement('div'); div.className='aboutSug';
+    div.innerHTML='<div><span style="margin-right:8px">'+s.e+'</span>'+s.t+'</div><div class="tick" style="display:'+(isActive?'block':'none')+'">✓</div>';
+    div.onclick=()=>{
+      currentAbout = s.t; currentEmoji = s.e;
+      document.getElementById('aboutInput').value = s.t;
+      document.getElementById('aboutEmoji').innerText = s.e;
+      updateAboutCount();
+      buildAboutSuggestions();
+    };
+    cont.appendChild(div);
+  });
+}
+
+function updateAboutCount(){
+  let v = document.getElementById('aboutInput').value;
+  document.getElementById('aboutCount').innerText = v.length+'/139';
+}
+
+function togglePrivacy(){
+  let m = document.getElementById('privacyMenu');
+  m.style.display = m.style.display==='none'?'block':'none';
+}
+
+function setPrivacy(val){
+  currentPrivacy = val;
+  localStorage.setItem('dd_about_privacy', val);
+  document.getElementById('aboutPrivacyLabel').innerText = val;
+  document.querySelectorAll('.privacyOpt .chk').forEach(c=>c.innerText='');
+  // set check
+  document.querySelectorAll('.privacyOpt').forEach(opt=>{
+    if(opt.innerText.includes(val)) opt.querySelector('.chk').innerText='✓';
+  });
+  document.getElementById('privacyMenu').style.display='none';
+}
+
+function saveAboutReal(){
+  let text = document.getElementById('aboutInput').value.trim();
+  if(!text) text = currentAbout;
+  let emoji = document.getElementById('aboutEmoji').innerText;
+  localStorage.setItem('dd_about_text', text);
+  localStorage.setItem('dd_about_emoji', emoji);
+  localStorage.setItem('dd_about', emoji+' '+text);
+  currentAbout = text; currentEmoji = emoji;
+  document.getElementById('pAbout').innerText = emoji+' '+text;
+  showPage('page-profileEdit');
+  document.getElementById('page-aboutEdit').style.display='none';
+  document.getElementById('page-profileEdit').style.display='flex';
+}
+
+// generic showPage if you don't have
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.style.display='none');
+  let target = document.getElementById(id);
+  if(target){ target.style.display='flex'; target.style.flexDirection='column'; }
+}
+</script>
 <script>
 // FIX CODES INSIDE - does not touch your other codes
 (function(){
