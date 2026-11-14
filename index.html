@@ -61,8 +61,6 @@ body{background:#000;color:#fff;height:100vh;overflow:hidden}
 <div id="page-groups" class="page"><div class="top"><div class="title">Groups</div><div class="iconBtn" style="background:#5f2ee0" onclick="createGroup()">+</div></div><div class="searchWrap"><input id="groupSearch" class="sInput" placeholder="Search groups..." oninput="renderGroups()"></div><div id="groupsList" style="flex:1;overflow:auto;padding:10px"></div><div class="bottom"><div class="navItem" onclick="goBottom('status')"><div>⭕</div>Status</div><div class="navItem" onclick="goBottom('calls')"><div>📞</div>Calls</div><div class="navItem active"><div>👥</div>Groups</div><div class="navItem" onclick="goBottom('chats')"><div>💬</div>Chats</div><div class="navItem" onclick="goBottom('you')"><div>👤</div>You</div></div></div>
 <div id="page-you" class="page"><div class="top"><div class="iconBtn" onclick="searchSettings()">🔍</div><div class="title" style="flex:1;text-align:center" id="youTitle">Da Demon Hub</div><div style="display:flex;gap:8px"><div class="iconBtn" onclick="showPage('page-qr')">▦</div><div class="iconBtn" onclick="showPage('page-profileEdit')">✏️</div></div></div><div style="flex:1;overflow:auto;padding-bottom:80px"><div style="text-align:center;padding:14px"><div style="background:#1c1e21;padding:8px 14px;border-radius:20px;display:inline-block;font-size:13px;color:#8696a0">😊 Express yourself in emoji!</div><div style="margin-top:12px"><div class="avatar" style="width:100px;height:100px;margin:0 auto;font-size:40px" id="youAvatar">👤</div><h3 style="margin-top:10px" id="youName2">Da Demon Hub</h3></div></div><div id="youSettingsList"></div></div><div class="bottom"><div class="navItem" onclick="goBottom('status')"><div>⭕</div>Status</div><div class="navItem" onclick="goBottom('calls')"><div>📞</div>Calls</div><div class="navItem" onclick="goBottom('groups')"><div>👥</div>Groups</div><div class="navItem" onclick="goBottom('chats')"><div>💬</div>Chats</div><div class="navItem active"><div>👤</div>You</div></div></div>
 
-<!-- PROFILE EDIT - FULLY FIXED LIKE WHATSAPP -->
-<!-- PROFILE PAGE - FIXED -->
 <div id="page-profileEdit" class="page">
   <div class="top"><div class="back" onclick="showPage('page-you')">‹</div><div class="title" style="flex:1;text-align:center">Profile</div><div style="width:28px"></div></div>
   <div style="flex:1;overflow:auto">
@@ -73,11 +71,11 @@ body{background:#000;color:#fff;height:100vh;overflow:hidden}
     </div>
     <div class="card">
       <div class="row" onclick="editField('name')"><b>Name</b><span id="pName" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Da Demon Hub</span><span>›</span></div>
-      <div class="row" onclick="editField('about')"><b>About</b><span id="pAbout" style="color:#5f2ee0;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">At work</span><span>›</span></div>
+      <div class="row" onclick="openAboutPage()"><b>About</b><span id="pAbout" style="color:#5f2ee0;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">At work</span><span>›</span></div>
       <div class="row" onclick="editField('username')"><b>Username</b><span id="pUsername" style="color:#5f2ee0">Reserve username...</span><span>›</span></div>
       <div class="row" onclick="editField('phone')"><b>Phone number</b><span id="pPhone">Add number (private)</span><span>›</span></div>
       <div class="row" onclick="editField('gmail')"><b>Gmail</b><span id="pGmail">Add gmail (private)</span><span>›</span></div>
-      <div class="row" onclick="editField('ddid')"><b>DD ID</b><span id="pDDId" style="color:#5f2ee0">DD-40671</span><span>›</span></div>
+      <div class="row" onclick="editField('ddid')"><b>DD ID</b><span id="pDDId" style="color:#5f2ee0">DD-80623</span><span>›</span></div>
       <div class="row" onclick="editField('links')"><b>Links</b><span id="pLinks" style="color:#5f2ee0">Add links (public)</span><span>›</span></div>
     </div>
     <div class="label">Your links (public on your profile)</div>
@@ -85,38 +83,99 @@ body{background:#000;color:#fff;height:100vh;overflow:hidden}
   </div>
 </div>
 
-<!-- ABOUT PAGE - FIXED, NO TIME PILL, NO WHATSAPP NAME -->
-<div id="page-aboutEdit" class="page" style="display:none;background:#0f0f0f;color:#fff">
-  <div class="top" style="background:#1f1f1f;border:none;padding:10px 14px;display:flex;align-items:center;gap:12px">
-    <div style="font-size:28px;cursor:pointer" onclick="showPage('page-profileEdit')">×</div>
+<!-- THIS IS THE ONLY EXTRA NEEDED TO MAKE GMAIL/DD ID EDIT FOR REAL - NOT A POPUP -->
+<div id="page-fieldEdit" class="page" style="display:none;background:#111;color:#fff;position:fixed;inset:0;z-index:9999;flex-direction:column">
+  <div style="background:#1f1f1f;padding:12px 14px;display:flex;align-items:center;gap:12px">
+    <div style="font-size:28px;cursor:pointer" onclick="closeFieldEdit()">×</div>
+    <div id="fieldTitle" style="flex:1;font-weight:700">Edit</div>
+    <div style="width:36px;height:36px;background:#5f2ee0;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="saveFieldReal()">✓</div>
+  </div>
+  <div style="padding:20px">
+    <input id="fieldInput" type="text" style="width:100%;background:#2a2a2a;border:none;padding:14px;border-radius:10px;color:#fff;outline:none;font-size:16px">
+    <div style="margin-top:12px;color:#888;font-size:12px">Saved to DDchat only • Not permanent • Change anytime</div>
+  </div>
+</div>
+
+<!-- ABOUT PAGE - CLEAN NO TIME PILL, NO WHATSAPP WORD -->
+<div id="page-aboutEdit" class="page" style="display:none;background:#0f0f0f;color:#fff;position:fixed;inset:0;z-index:9998;flex-direction:column">
+  <div style="background:#1f1f1f;padding:10px 14px;display:flex;align-items:center;gap:12px">
+    <div style="font-size:28px;cursor:pointer" onclick="closeAboutPage()">×</div>
     <div style="flex:1;display:flex;align-items:center;background:#2a2a2a;border-radius:22px;padding:8px 12px;gap:8px">
-      <span id="aboutEmoji">😁</span>
-      <input id="aboutInput" type="text" placeholder="Type or pick suggestion" style="flex:1;background:transparent;border:none;color:#fff;outline:none;font-size:15px" oninput="updateAboutCount()">
+      <span id="aboutEmoji">💼</span>
+      <input id="aboutInput" type="text" placeholder="Type or pick suggestion" style="flex:1;background:transparent;border:none;color:#fff;outline:none;font-size:15px" oninput="document.getElementById('aboutCount').innerText=this.value.length+'/139'">
       <span id="aboutCount" style="font-size:11px;color:#888">0/139</span>
     </div>
-    <div style="width:36px;height:36px;background:#5f2ee0;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700" onclick="saveAboutReal()">✓</div>
+    <div style="width:36px;height:36px;background:#5f2ee0;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="saveAboutReal()">✓</div>
   </div>
-  
   <div style="padding:12px 16px">
-    <div style="display:flex;align-items:center;gap:8px">
-      <div id="aboutPrivacyBtn" onclick="togglePrivacy()" style="background:#2a2a2a;padding:6px 12px;border-radius:16px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px">
-        <span>◍</span> <span id="aboutPrivacyLabel">My contacts</span> <span>▼</span>
-      </div>
-    </div>
-    <!-- Privacy Menu Real -->
+    <div onclick="togglePrivacy()" style="background:#2a2a2a;padding:6px 12px;border-radius:16px;font-size:13px;cursor:pointer;display:inline-flex;gap:6px"><span id="aboutPrivacyLabel">My contacts</span> ▼</div>
     <div id="privacyMenu" style="display:none;background:#222;border-radius:12px;margin-top:8px;overflow:hidden">
-      <div class="privacyOpt" onclick="setPrivacy('Everyone')"><span>🌐 Everyone</span><span class="chk"></span></div>
-      <div class="privacyOpt" onclick="setPrivacy('My contacts')"><span>👥 My contacts</span><span class="chk">✓</span></div>
-      <div class="privacyOpt" onclick="setPrivacy('My contacts except...')"><span>👥 My contacts except...</span><span class="chk"></span></div>
-      <div class="privacyOpt" onclick="setPrivacy('Nobody')"><span>🚫 Nobody</span><span class="chk"></span></div>
+      <div style="padding:14px;border-bottom:1px solid #333;cursor:pointer" onclick="setPrivacy('Everyone')">🌐 Everyone</div>
+      <div style="padding:14px;border-bottom:1px solid #333;cursor:pointer" onclick="setPrivacy('My contacts')">👥 My contacts</div>
+      <div style="padding:14px;border-bottom:1px solid #333;cursor:pointer" onclick="setPrivacy('My contacts except...')">👥 My contacts except...</div>
+      <div style="padding:14px;cursor:pointer" onclick="setPrivacy('Nobody')">🚫 Nobody</div>
     </div>
   </div>
-
-  <div style="padding:8px 16px;color:#aaa;font-size:12px">Select an About or type your own</div>
-  <div class="card" style="background:#1a1a1a;margin:0 12px;border-radius:12px;overflow:hidden" id="aboutSuggestions"></div>
-  
-  <div style="padding:16px;color:#888;font-size:11px;text-align:center">About saved to DDchat only • Not permanent • Change anytime</div>
+  <div style="padding:8px 16px;color:#aaa;font-size:12px">Select suggestion or type your own - it will appear in About</div>
+  <div id="aboutSuggestions" style="background:#1a1a1a;margin:0 12px;border-radius:12px;overflow:hidden"></div>
 </div>
+
+<script>
+let curField = '';
+let curAboutText = localStorage.getItem('dd_about') || 'At work';
+let curAboutEmoji = localStorage.getItem('dd_about_emoji') || '💼';
+let curPrivacy = localStorage.getItem('dd_privacy') || 'My contacts';
+
+const aboutList = [{e:'💼',t:'At work'},{e:'😊',t:'Available'},{e:'🔋',t:'Battery about to die'},{e:'😴',t:'Busy'},{e:'✈️',t:'At the airport'},{e:'🎬',t:'At the movies'},{e:'😁',t:'Today in emoji mood'},{e:'🌙',t:'Sleeping'},{e:'🏋️',t:'At the gym'}];
+
+function loadProfile(){
+  ['name','username','phone','gmail','ddid','links'].forEach(f=>{
+    let v=localStorage.getItem('dd_'+f); if(v) document.getElementById('p'+f.charAt(0).toUpperCase()+f.slice(1)).innerText=v;
+  });
+  if(localStorage.getItem('dd_about')) document.getElementById('pAbout').innerText=localStorage.getItem('dd_about');
+  document.getElementById('aboutPrivacyLabel').innerText=curPrivacy;
+}
+setTimeout(loadProfile,100);
+
+function editField(f){
+  curField=f;
+  document.getElementById('fieldTitle').innerText='Edit '+f.toUpperCase();
+  document.getElementById('fieldInput').value=localStorage.getItem('dd_'+f)||'';
+  document.getElementById('page-fieldEdit').style.display='flex';
+  document.getElementById('fieldInput').focus();
+}
+function closeFieldEdit(){ document.getElementById('page-fieldEdit').style.display='none'; }
+function saveFieldReal(){
+  let v=document.getElementById('fieldInput').value.trim();
+  if(v){ localStorage.setItem('dd_'+curField,v); document.getElementById('p'+curField.charAt(0).toUpperCase()+curField.slice(1)).innerText=v; }
+  closeFieldEdit();
+}
+
+function openAboutPage(){
+  document.getElementById('page-aboutEdit').style.display='flex';
+  document.getElementById('aboutInput').value=curAboutText;
+  document.getElementById('aboutEmoji').innerText=curAboutEmoji;
+  document.getElementById('aboutPrivacyLabel').innerText=curPrivacy;
+  let c=document.getElementById('aboutSuggestions'); c.innerHTML='';
+  aboutList.forEach(s=>{
+    let d=document.createElement('div'); d.style.padding='14px'; d.style.borderBottom='1px solid #222'; d.style.cursor='pointer'; d.style.display='flex'; d.style.justifyContent='space-between';
+    d.innerHTML='<span>'+s.e+' '+s.t+'</span><span style="color:#5f2ee0;display:'+(s.t===curAboutText?'block':'none')+'">✓</span>';
+    d.onclick=()=>{ curAboutText=s.t; curAboutEmoji=s.e; document.getElementById('aboutInput').value=s.t; document.getElementById('aboutEmoji').innerText=s.e; openAboutPage(); };
+    c.appendChild(d);
+  });
+}
+function closeAboutPage(){ document.getElementById('page-aboutEdit').style.display='none'; }
+function saveAboutReal(){
+  let t=document.getElementById('aboutInput').value.trim()||curAboutText;
+  let e=document.getElementById('aboutEmoji').innerText;
+  localStorage.setItem('dd_about',e+' '+t); localStorage.setItem('dd_about_emoji',e); localStorage.setItem('dd_about_text',t);
+  curAboutText=t; curAboutEmoji=e;
+  document.getElementById('pAbout').innerText=e+' '+t;
+  closeAboutPage();
+}
+function togglePrivacy(){ let m=document.getElementById('privacyMenu'); m.style.display=m.style.display==='none'?'block':'none'; }
+function setPrivacy(v){ curPrivacy=v; localStorage.setItem('dd_privacy',v); document.getElementById('aboutPrivacyLabel').innerText=v; document.getElementById('privacyMenu').style.display='none'; }
+</script>
 
 <style>
 .privacyOpt{display:flex;justify-content:space-between;padding:14px 16px;cursor:pointer;border-bottom:1px solid #333;color:#fff}
