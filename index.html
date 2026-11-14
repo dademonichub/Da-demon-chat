@@ -91,7 +91,10 @@ function editField(type){
 <style>
 #aboutSugs .row.active{background:#eee}
 </style>
-<div id="page-qr" class="page"><div class="top"><div class="back" onclick="showPage('page-you')">✕</div><div class="title" style="flex:1;text-align:center">QR Code</div><div class="iconBtn" onclick="shareQR()">↗️</div></div><div style="flex:1;padding:20px;text-align:center"><h3 id="qrName">Da Demon Hub</h3><div id="qrBox" style="width:260px;height:260px;background:#fff;margin:20px auto;border-radius:12px;display:grid;place-items:center;color:#000;padding:10px"><img id="qrImg" src="" style="width:200px;height:200px"><div><span id="qrId">DD-48392</span><br><small style="color:#555">Scan to add me on DDchat</small></div></div><button class="btn" onclick="saveQR()">Save QR</button><button class="btn" style="background:#2a3942" onclick="resetQR()">Reset QR</button><button class="btn" style="background:#2a3942" onclick="logout()">Logout (Switch account)</button></div></div>
+<div id="page-qr" class="page"><div class="top"><div class="back" onclick="showPage('page-you')">✕</div><div class="title" style="flex:1;text-align:center">QR Code</div><div class="iconBtn" onclick="shareQR()">↗️</div></div><div style="flex:1;padding:20px;text-align:center"><h3 id="qrName">Da Demon Hub</h3><div id="qrBox" style="width:260px;height:260px;background:#fff;margin:20px auto;border-radius:12px;display:grid;place-items:center;color:#000;padding:10px"><img id="qrImg" src="" style="width:200px;height:200px"><div><span id="qrId">DD-48392</span><br><small style="color:#555">Scan to add me on DDchat</small></div></div><button class="btn" onclick="shareQR()">Share QR</button><button class="btn" style="background:#2a3942" onclick="saveQR()">Save QR</button><button class="btn" style="background:#2a3942" onclick="openQRScanner()">Scan QR</button><button class="btn" style="background:#2a3942" onclick="resetQR()">Reset QR</button><button class="btn" style="background:#2a3942" onclick="logout()">Logout (Switch account)</button></div></div>
+
+<!-- QR SCANNER PAGE -->
+<div id="page-qrScan" class="page" style="background:#000;z-index:80"><div class="top"><div class="back" onclick="showPage('page-qr')">✕</div><div class="title" style="flex:1;text-align:center">Scan DDchat QR</div></div><video id="qrVideo" autoplay playsinline style="width:100%;flex:1;object-fit:cover"></video><div style="padding:12px;text-align:center;color:#fff;background:#111b21">Point camera at DDchat QR<br><small id="qrScanStatus" style="color:#8696a0">Scanning...</small></div></div>
 <div id="page-generic" class="page"><div class="top"><div class="back" onclick="showPage('page-you')">‹</div><div class="title" style="flex:1;text-align:center" id="gTitle">Title</div><div style="width:28px"></div></div><div id="gBody" style="flex:1;overflow:auto;padding:12px"></div></div>
 <div id="page-statusPrivacy" class="page"><div class="top"><div class="back" onclick="showPage('page-status')">‹</div><div class="title" style="flex:1">Status privacy</div><div style="font-size:22px">🔒</div></div><div style="flex:1;overflow:auto;padding:12px"><div class="label">Who can see my status - DDchat friends only</div><div class="card"><div class="row" onclick="setStatusP('contacts')"><div><b>My contacts</b><div style="font-size:12px;color:#8696a0">All your DDchat friends</div></div><span style="color:#5f2ee0" id="sp1">✓</span></div><div class="row" onclick="setStatusP('except')"><div><b>My contacts except...</b><div style="font-size:12px;color:#5f2ee0" id="spExcept">0 excluded</div></div><span>›</span></div><div class="row" onclick="setStatusP('only')"><div><b>Only share with...</b><div style="font-size:12px;color:#5f2ee0" id="spOnly">0 selected</div></div><span>›</span></div></div><div class="label">Your status is end-to-end encrypted and only your DDchat contacts see it</div></div></div>
 <div id="sheetStatusDots" class="sheetBg" onclick="if(event.target==this) closeStatusThreeDots()"><div class="sheet" style="max-width:220px;left:auto;right:8px;top:50px;bottom:auto;border-radius:12px"><div class="sheetItem" onclick="closeStatusThreeDots();showPage('page-statusPrivacy')"><span>Status privacy</span><span style="font-size:18px">🔒</span></div></div></div>
@@ -122,23 +125,125 @@ let camStream=null;let facing='environment';let currentPhoto='';
 let sendTargets=new Set();
 let statusPrivacy='contacts';
 function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');if(id=='page-main')renderChats();if(id=='page-you')renderYou();if(id=='page-groups')renderGroups();if(id=='page-calls')renderCalls();if(id=='page-qr')updateQR();if(id=='page-profileEdit')renderProfileFields();}
-function updateQR(){let id=document.getElementById('qrId');if(!id) return; id.innerText=curUser.id; document.getElementById('qrName').innerText=curUser.name; let img=document.getElementById('qrImg'); if(img){ let data=encodeURIComponent('DDCHAT:'+curUser.id+':'+curUser.name); img.src='https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+data; } }
-function init(){
-  let saved=JSON.parse(localStorage.getItem('dd_user')||'null');
-  if(saved){ curUser={...curUser,...saved}; }
-  userLinks=JSON.parse(localStorage.getItem('dd_links')||'[]');
-  setTimeout(()=>{
-    if(saved && saved.email && saved.pass){
-      document.getElementById('youTitle').innerText=curUser.name;
-      document.getElementById('youName2').innerText=curUser.name;
-      document.getElementById('qrName').innerText=curUser.name;
-      document.getElementById('qrId').innerText=curUser.id;
-      renderProfileFields();
-      showPage('page-main'); renderChats();
-    }else{
-      showPage('page-lang'); buildLang();
+function updateQR(){
+  let idEl=document.getElementById('qrId'); if(!idEl) return;
+  idEl.innerText=curUser.id; 
+  document.getElementById('qrName').innerText=curUser.name;
+  let img=document.getElementById('qrImg'); 
+  if(img){ 
+    let data=encodeURIComponent('DDCHAT:'+curUser.id+':'+curUser.name);
+    img.src='https://api.qrserver.com/v1/create-qr-code/?size=300x300&data='+data; 
+  } 
+}
+
+async function shareQR(){
+  updateQR();
+  let img=document.getElementById('qrImg');
+  let text = `Add me on DDchat\nName: ${curUser.name}\nDD ID: ${curUser.id}\nLink: ddchat.link/${curUser.username||curUser.id}`;
+  try{
+    // Try share file if browser supports
+    let res = await fetch(img.src);
+    let blob = await res.blob();
+    let file = new File([blob], `DDchat-${curUser.id}.png`, {type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:'My DDchat QR', text:text});
+      return;
     }
-  },1200);
+  }catch(e){}
+  // Fallback share text/link
+  if(navigator.share){
+    try{ await navigator.share({title:'My DDchat QR', text:text, url:img.src}); return; }catch(e){}
+  }
+  // Last fallback - copy
+  try{ await navigator.clipboard.writeText(text); alert('QR link copied!\n'+text); }
+  catch(e){ prompt('Copy your DDchat QR:', text); }
+}
+
+function saveQR(){
+  let img=document.getElementById('qrImg');
+  let a=document.createElement('a');
+  a.href=img.src; a.download=`DDchat-${curUser.id}.png`; a.click();
+}
+
+function resetQR(){
+  if(!confirm('Reset DD ID? Old QR will stop working')) return;
+  curUser.id='DD-'+Math.floor(Math.random()*90000+10000);
+  save(); updateQR();
+}
+
+let qrStream=null, qrScanning=false;
+async function openQRScanner(){
+  showPage('page-qrScan');
+  let video=document.getElementById('qrVideo');
+  let status=document.getElementById('qrScanStatus');
+  try{
+    if(qrStream) qrStream.getTracks().forEach(t=>t.stop());
+    qrStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    video.srcObject=qrStream;
+    qrScanning=true;
+    status.innerText='Scanning...';
+    scanLoop();
+  }catch(e){
+    let code=prompt('Camera blocked. Enter QR text manually (DDCHAT:ID:Name):','');
+    if(code) handleScannedQR(code);
+  }
+}
+
+async function scanLoop(){
+  let video=document.getElementById('qrVideo');
+  let status=document.getElementById('qrScanStatus');
+  if(!qrScanning) return;
+  if('BarcodeDetector' in window){
+    try{
+      let detector=new BarcodeDetector({formats:['qr_code']});
+      let codes=await detector.detect(video);
+      if(codes.length>0){ handleScannedQR(codes[0].rawValue); return; }
+    }catch(e){}
+  }
+  // If no detector, keep trying
+  setTimeout(scanLoop, 500);
+}
+
+function handleScannedQR(raw){
+  qrScanning=false;
+  if(qrStream){ qrStream.getTracks().forEach(t=>t.stop()); qrStream=null; }
+  if(!raw.startsWith('DDCHAT:')){
+    document.getElementById('qrScanStatus').innerText='Invalid QR - Not DDchat QR';
+    alert('Invalid QR! This is not a DDchat user QR.');
+    showPage('page-qr');
+    return;
+  }
+  let parts=raw.split(':');
+  let id=parts[1]; let name=parts[2]||id;
+  if(!id || !id.startsWith('DD-')){
+    alert('Invalid DDchat ID in QR'); showPage('page-qr'); return;
+  }
+  // Check if already added
+  let exists=chats.find(c=>c.id==id);
+  if(exists){ alert(name+' already added'); showPage('page-main'); renderChats(); return; }
+  if(confirm(`Valid DDchat user found:\n${name}\n${id}\n\nAdd to contacts?`)){
+    chats.push({id:id,name:name,msg:'Added via QR',time:'now',avatar:name[0]});
+    save(); renderChats(); showPage('page-main');
+  }else{
+    showPage('page-qr');
+  }
+}
+ 
+function init(){
+  let saved=null;
+  try{ saved=JSON.parse(localStorage.getItem('dd_user')||'null'); }catch(e){}
+  userLinks=JSON.parse(localStorage.getItem('dd_links')||'[]');
+  
+  if(saved && saved.id){
+    curUser={...curUser,...saved}; // load old account
+    curUser.version = '2.0'; // you can add new fields here and they will apply
+    renderProfileFields();
+    updateQR();
+    showPage('page-main');
+    renderChats();
+    return;
+  }
+  setTimeout(()=>{ showPage('page-lang'); buildLang(); },800);
 }
 function save(){localStorage.setItem('dd_chats',JSON.stringify(chats));localStorage.setItem('dd_groups',JSON.stringify(groups));localStorage.setItem('dd_calls',JSON.stringify(calls));localStorage.setItem('dd_user',JSON.stringify(curUser));localStorage.setItem('dd_links',JSON.stringify(userLinks));}
 function buildLang(){let langs=['English','Chinese 中文','Spanish Español','French Français','Arabic العربية','Hindi हिन्दी','Yoruba Yorùbá','Igbo','Hausa','Pidgin','Portuguese','Russian Русский','Japanese 日本語','German','Korean 한국어'];let list=document.getElementById('langList');list.innerHTML='';langs.forEach(l=>{let d=document.createElement('div');d.className='row';d.innerHTML='<b>'+l+'</b><span>›</span>';d.onclick=()=>{curUser.lang=l;document.getElementById('curLang').innerText=l;save();showPage('page-auth');};list.appendChild(d);});}
@@ -251,7 +356,6 @@ function doSend(){
   sendTargets.forEach(id=>{if(id=='STATUS')return;let f=chats.find(c=>c.id==id);if(f){f.msg='📷 Photo';f.time='now';}});
   save();closeCamera();if(sendTargets.has('STATUS')) showPage('page-status'); else showPage('page-main'); renderChats();
 }
-function scanQRFromCamera(){let code=prompt('Enter DD ID from QR:','DD-');if(code){let name=prompt('Save as:','QR Friend');chats.push({id:code,name:name||code,msg:'Added via QR',time:'now',avatar:(name||code)[0]});save();closeCamera();renderChats();}}
 function newChat(){document.getElementById('sheetNewChat').style.display='block';renderNewChatList();}
 function closeNewChat(){document.getElementById('sheetNewChat').style.display='none';}
 function renderNewChatList(){
