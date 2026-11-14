@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>💜 DD Chat - Private Chat Center</title>
+<meta name="description" content="Welcome to DD Chat - The Private Chat Center that doesn't ask too much. Chat with Gmail or private ID like DD-48392. No number needed.">
+<meta property="og:title" content="💜 DD Chat - Private Chat Center">
+<meta property="og:description" content="Welcome to DD Chat - The Private Chat Center that doesn't ask too much. Chat with Gmail or private ID like DD-48392. No number needed.">
+<meta property="og:image" content="./icon-512.png">
+<meta name="theme-color" content="#5f2ee0">
+<link rel="icon" href="./icon-192.png"><link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto}
+:root{--p:#5f2ee0;--pl:#7c3aed;--pd:#1a1033;--bg:#0f0a1f;--card:#1e1540;--txt:#e9edef;--muted:#9d8ec7;--border:#2d1b69}
+body{background:var(--bg);color:var(--txt);height:100vh;overflow:hidden}
+#splash{position:fixed;inset:0;background:radial-gradient(120% 120% at 50% 0%, #7c3aed 0%, #5f2ee0 35%, #0f0a1f 80%);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:.6s}
+#splash.hide{opacity:0;pointer-events:none}
+.logo-big{width:110px;height:110px;background:#fff;border-radius:28px;display:grid;place-items:center;font-size:56px;box-shadow:0 20px 50px rgba(0,0,0,.4)}
+.splash-txt{margin-top:18px;text-align:center} .splash-txt h1{font-size:32px} .splash-txt p{color:#d8c6ff;margin-top:6px}
+#langScreen{position:fixed;inset:0;background:var(--bg);z-index:9998;display:none;padding:20px;overflow:auto}
+.lang-search{width:100%;padding:14px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:#fff;margin:12px 0;outline:none}
+.lang-item{padding:14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;cursor:pointer}
+.lang-item:hover{background:var(--card)}
+#authScreen{position:fixed;inset:0;background:var(--bg);z-index:9997;display:none;align-items:center;justify-content:center;padding:16px}
+.authBox{width:100%;max-width:420px;background:var(--pd);border-radius:22px;overflow:hidden;border:1px solid var(--border)}
+.authHead{background:linear-gradient(135deg,var(--p),var(--pl));padding:24px;text-align:center}
+.tabs{display:flex} .tab{flex:1;padding:14px;text-align:center;cursor:pointer;color:var(--muted);font-weight:700;border-bottom:3px solid transparent} .tab.active{color:#fff;border-color:var(--pl);background:#21164a}
+.form{padding:22px} .form input{width:100%;padding:14px;margin:8px 0;border-radius:12px;border:1px solid var(--border);background:#21164a;color:#fff;outline:none}
+.btn{width:100%;padding:14px;border:none;border-radius:12px;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--p),var(--pl));cursor:pointer;margin-top:10px}
+.btn-sec{background:#2d1b69} .idBox{background:#21164a;padding:14px;border-radius:12px;text-align:center;border:1px dashed var(--pl);margin:10px 0} .idBox b{font-size:22px;color:#a78bfa;letter-spacing:2px}
+#mainApp{display:none;height:100vh;flex-direction:column;background:#0b0618}
+.topBar{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--pd);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5}
+.topLeft,.topRight{display:flex;align-items:center;gap:12px}
+.iconBtn{width:36px;height:36px;border-radius:10px;background:#21164a;border:1px solid var(--border);display:grid;place-items:center;cursor:pointer;color:#fff;user-select:none}
+.brand{font-weight:900;letter-spacing:.5px;font-size:18px}
+.searchWrap{padding:10px 12px;background:var(--pd)} .searchInput{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:#21164a;color:#fff;outline:none}
+.chatList{flex:1;overflow:auto;padding-bottom:80px}
+.chatRow{display:flex;gap:12px;padding:14px 14px;border-bottom:1px solid rgba(45,27,105,.5);cursor:pointer}
+.chatRow:active{background:#1a1033}
+.avatar{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--p),var(--pl));display:grid;place-items:center;font-weight:800;flex-shrink:0;position:relative}
+.avatar.online::after{content:'';position:absolute;right:1px;bottom:1px;width:12px;height:12px;background:#22c55e;border:2px solid var(--pd);border-radius:50%}
+.chatMeta{flex:1;min-width:0} .chatMeta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .chatMeta span{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.time{font-size:11px;color:var(--muted)}
+.bottomNav{position:fixed;bottom:0;left:0;right:0;background:var(--pd);border-top:1px solid var(--border);display:flex;z-index:6}
+.navItem{flex:1;padding:10px 4px;text-align:center;font-size:11px;color:var(--muted);cursor:pointer} .navItem.active{color:#fff} .navItem div{font-size:20px}
+.page{position:fixed;inset:0;background:var(--bg);z-index:10;display:none;flex-direction:column}
+.pageHead{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--pd);border-bottom:1px solid var(--border)}
+.backBtn{width:36px;height:36px;border-radius:10px;background:#21164a;border:1px solid var(--border);display:grid;place-items:center;cursor:pointer}
+.pageBody{flex:1;overflow:auto;padding:14px}
+.settingRow{display:flex;justify-content:space-between;align-items:center;padding:16px 14px;background:var(--card);border-bottom:1px solid var(--border);cursor:pointer}
+.switch{width:44px;height:26px;background:#2d1b69;border-radius:99px;position:relative;cursor:pointer} .switch.on{background:var(--pl)} .switch::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.2s} .switch.on::after{left:21px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:none;align-items:flex-end;justify-content:center}
+.modalBox{background:var(--pd);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:10px;max-height:85vh;overflow:auto;border:1px solid var(--border)}
+.mItem{padding:14px;border-radius:12px;cursor:pointer} .mItem:hover{background:#21164a}
+.profileTop{text-align:center;padding:20px} .profilePic{width:110px;height:110px;border-radius:50%;background:linear-gradient(135deg,var(--p),var(--pl));display:grid;place-items:center;font-size:42px;margin:0 auto;position:relative;cursor:pointer}
+.pencil{position:absolute;right:0;bottom:0;width:32px;height:32px;background:#fff;color:#000;border-radius:50%;display:grid;place-items:center}
+.qrBox{background:#fff;color:#000;padding:14px;border-radius:16px;width:200px;margin:14px auto;text-align:center;font-weight:800}
+.badge{background:var(--pl);color:#fff;font-size:10px;padding:2px 6px;border-radius:99px;margin-left:6px}
+.msg{margin:8px 0;padding:10px 14px;border-radius:16px;max-width:78%;word-break:break-word} .msg.me{background:linear-gradient(135deg,#5f2ee0,#7c3aed);margin-left:auto} .msg.other{background:#1e1540}
+</style>
+</head>
+<body>
+<!-- BODY AND SCRIPT IS INSIDE THE FILE I SAVED - DOWNLOAD DDChat_FULL.html FROM WORKSPACE -->
