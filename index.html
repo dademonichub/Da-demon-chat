@@ -216,7 +216,7 @@ video{width:100%;height:100%;object-fit:cover}
     <div class="navItem" onclick="goBottom('chats',this)"><div>💬</div>Chats</div>
     <div class="navItem" onclick="goBottom('groups',this)"><div>👥</div>Groups</div>
     <div class="navItem" onclick="goBottom('calls',this)"><div>📞</div>Calls</div>
-    <div class="navItem" onclick="goBottom('status',this)"><div>⭕</div>Status</div>
+    <div class="navItem" onclick="goBottom('status',this)"><div>👤</div>Status</div>
     <div class="navItem active" onclick="goBottom('you',this)"><div>👤</div>You</div>
   </div>
 </div>
@@ -373,4 +373,228 @@ video{width:100%;height:100%;object-fit:cover}
 </div>
 
 <!-- STORAGE SETTINGS -->
-<div id
+<div id="page-settings-storage" class="page">
+  <div class="top"><div class="back" onclick="showPage('page-you')">‹</div><div class="title" style="flex:1">Storage and data</div></div>
+  <div style="flex:1;overflow:auto;padding:12px">
+    <div class="card"><div class="row"><b>Manage storage</b><span>›</span></div><div class="row"><b>Network usage</b><span>›</span></div></div>
+    <p class="muted" style="padding:8px">Storage is saved on this device only in this demo version.</p>
+    <button class="btn danger" onclick="if(confirm('Clear all chats?')){localStorage.removeItem('dd_chats');location.reload()}">Clear all chats</button>
+  </div>
+</div>
+
+<!-- HELP SETTINGS -->
+<div id="page-settings-help" class="page">
+  <div class="top"><div class="back" onclick="showPage('page-you')">‹</div><div class="title" style="flex:1">Help and feedback</div></div>
+  <div style="flex:1;overflow:auto;padding:12px">
+    <div class="card"><div class="row" onclick="alert('DDchat Help Center - coming soon')"><b>Help Center</b><span>›</span></div><div class="row" onclick="alert('Thanks for your feedback!')"><b>Send feedback</b><span>›</span></div></div>
+  </div>
+</div>
+
+<!-- SHEETS -->
+<div id="sheetBg" class="sheetBg" onclick="closeSheet()"><div class="sheet" id="sheetBox" onclick="event.stopPropagation()"></div></div>
+
+<script>
+let me = JSON.parse(localStorage.getItem('dd_me')||'null');
+let chats = JSON.parse(localStorage.getItem('dd_chats')||'[]');
+let groups = JSON.parse(localStorage.getItem('dd_groups')||'[]');
+let calls = JSON.parse(localStorage.getItem('dd_calls')||'[]');
+let settings = JSON.parse(localStorage.getItem('dd_settings')||'{}');
+let filter='All', currentChat=null, currentGroup=null, langs=['English','French','Spanish','German','Portuguese','Hausa','Yoruba','Igbo','Arabic','Hindi','Chinese','Swahili'];
+let demoChats=[{id:'1',name:'DD Support',last:'Welcome to DDchat 🎉',time:'Now',unread:1,msgs:[{me:false,text:'Welcome to DDchat 🎉'}]},{id:'2',name:'Test Friend',last:'Hello!',time:'Now',unread:0,msgs:[{me:false,text:'Hello!'}]}];
+if(!chats.length) chats=demoChats;
+
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  let el=document.getElementById(id);
+  if(el) el.classList.add('active');
+  if(id==='page-main') renderChats();
+  if(id==='page-groups') renderGroups();
+  if(id==='page-calls') renderCalls();
+  if(id==='page-status') renderStatus();
+  if(id==='page-you') renderYou();
+  if(id==='page-qr') renderQR();
+  if(id==='page-profileEdit') renderProfileEdit();
+  if(id==='page-settings-appearance') renderThemeColors();
+  if(id==='page-lang') renderLang();
+  closeSheet();
+}
+function renderLang(){
+  let q=(document.getElementById('langSearch')?.value||'').toLowerCase();
+  let list=document.getElementById('langList'); if(!list) return;
+  list.innerHTML=langs.filter(l=>l.toLowerCase().includes(q)).map(l=>`<div class="card"><div class="row" onclick="pickLang('${l}')"><b>${l}</b><span>›</span></div></div>`).join('');
+}
+function filterLang(){renderLang()}
+function pickLang(l){localStorage.setItem('dd_lang',l); showPage('page-auth');}
+function doAuth(){
+  let email=document.getElementById('authEmail').value.trim();
+  let user=document.getElementById('authUsername').value.trim();
+  let pass=document.getElementById('authPass').value;
+  let msg=document.getElementById('authMsg');
+  if(!email||!email.includes('@')){msg.textContent='Enter valid email';return;}
+  if(!user){msg.textContent='Enter username';return;}
+  if(pass.length<6){msg.textContent='Password must be 6+ chars';return;}
+  me={email,username:user,name:user,about:'Hey there! I am using DDchat',phone:'',link:'',ddid:'DD'+Math.floor(100000+Math.random()*900000),photo:''};
+  localStorage.setItem('dd_me',JSON.stringify(me));
+  localStorage.setItem('dd_chats',JSON.stringify(chats));
+  msg.textContent='Welcome '+user+'!';
+  setTimeout(()=>showPage('page-main'),400);
+}
+function doRecover(){alert('Recovery link sent to your email (demo).')}
+function logout(){if(confirm('Log out?')){localStorage.removeItem('dd_me');me=null;showPage('page-auth');}}
+function renderYou(){
+  if(!me) return;
+  document.getElementById('youName2').textContent=me.name||me.username;
+  document.getElementById('youId2').textContent='@'+me.username+' • '+me.ddid;
+  document.getElementById('youAvatar').innerHTML=me.photo?`<img src="${me.photo}">`:(me.name||'U')[0].toUpperCase();
+}
+function renderProfileEdit(){
+  if(!me) return;
+  document.getElementById('pName').textContent=me.name;
+  document.getElementById('pAbout').textContent=me.about;
+  document.getElementById('pUsername').textContent='@'+me.username;
+  document.getElementById('pPhone').textContent=me.phone||'Add';
+  document.getElementById('pEmail').textContent=me.email;
+  document.getElementById('pLink').textContent=me.link||'Add';
+  document.getElementById('pDdid').textContent=me.ddid;
+  document.getElementById('editAvatar').innerHTML=me.photo?`<img src="${me.photo}">`:'👤';
+  document.getElementById('aUsername').textContent='@'+me.username;
+  document.getElementById('aEmail').textContent=me.email;
+  document.getElementById('aPhone').textContent=me.phone||'';
+}
+function editField(f){
+  if(!me) return;
+  let label={name:'Name',about:'About',username:'Username',phone:'Phone',email:'Email',link:'Link'}[f]||f;
+  let val=prompt(label, me[f]||'');
+  if(val===null) return;
+  me[f]=val; if(f==='name'){} localStorage.setItem('dd_me',JSON.stringify(me)); renderProfileEdit(); renderYou();
+}
+function changePassword(){let p=prompt('New password (min 6)'); if(p&&p.length>=6) alert('Password changed'); else if(p) alert('Too short');}
+function pickProfilePhoto(){let inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.onchange=e=>{let r=new FileReader(); r.onload=()=>{me.photo=r.result; localStorage.setItem('dd_me',JSON.stringify(me)); renderProfileEdit(); renderYou();}; r.readAsDataURL(e.target.files[0]);}; inp.click();}
+function renderChats(){
+  let q=(document.getElementById('mainSearch')?.value||'').toLowerCase();
+  let list=document.getElementById('chatList'); if(!list) return;
+  let filtered=chats.filter(c=>{
+    if(filter==='Unread'&&!c.unread) return false;
+    if(filter==='Groups'&&!c.isGroup) return false;
+    return (c.name+' '+c.last).toLowerCase().includes(q);
+  });
+  if(!filtered.length) list.innerHTML='<p class="muted" style="padding:20px;text-align:center">No chats yet. Tap + to start.</p>';
+  else list.innerHTML=filtered.map(c=>`<div class="chatRow" onclick="openChat('${c.id}')"><div class="avatar">${c.photo?`<img src="${c.photo}">`:c.name[0].toUpperCase()}${c.online?'<span class="dot"></span>':''}</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between"><b>${c.name}</b><small class="muted">${c.time||''}</small></div><div class="muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.last||''}</div></div>${c.unread?`<span style="background:var(--p);min-width:20px;height:20px;border-radius:10px;display:grid;place-items:center;font-size:11px;padding:0 5px">${c.unread}</span>`:''}</div>`).join('');
+}
+function setFilter(f,el){filter=f; document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active')); el.classList.add('active'); renderChats();}
+function goBottom(tab,el){
+  document.querySelectorAll('.navItem').forEach(n=>n.classList.remove('active')); if(el) el.classList.add('active');
+  if(tab==='chats') showPage('page-main');
+  if(tab==='groups') showPage('page-groups');
+  if(tab==='calls') showPage('page-calls');
+  if(tab==='status') showPage('page-status');
+  if(tab==='you') showPage('page-you');
+}
+function openChat(id){
+  currentChat=chats.find(c=>c.id===id); if(!currentChat) return;
+  currentChat.unread=0; saveChats();
+  document.getElementById('cName').textContent=currentChat.name;
+  document.getElementById('cAvatar').innerHTML=currentChat.photo?`<img src="${currentChat.photo}">`:currentChat.name[0].toUpperCase();
+  document.getElementById('cStatus').textContent=currentChat.online?'online':'offline';
+  renderMessages(); showPage('page-chat');
+}
+function renderMessages(){
+  let box=document.getElementById('cMessages'); if(!currentChat) return;
+  box.innerHTML=(currentChat.msgs||[]).map(m=>`<div class="msgRow ${m.me?'me':''}"><div class="bubble ${m.me?'me':'them'}">${m.img?`<img src="${m.img}">`:''}${m.text||''}</div></div>`).join('');
+  box.scrollTop=box.scrollHeight;
+}
+function sendMsg(){
+  let inp=document.getElementById('msgInput'); let t=inp.value.trim(); if(!t||!currentChat) return;
+  currentChat.msgs=currentChat.msgs||[]; currentChat.msgs.push({me:true,text:t}); currentChat.last=t; currentChat.time='Now'; inp.value=''; saveChats(); renderMessages();
+}
+function leaveChat(){showPage('page-main');}
+function newChat(){
+  let name=prompt('Enter name or username to chat with:'); if(!name) return;
+  let id=Date.now().toString(); chats.unshift({id,name,last:'Say hi 👋',time:'Now',unread:0,msgs:[{me:false,text:'Hi!'}]}); saveChats(); openChat(id);
+}
+function saveChats(){localStorage.setItem('dd_chats',JSON.stringify(chats));}
+function renderGroups(){
+  let q=(document.getElementById('groupSearch')?.value||'').toLowerCase();
+  let list=document.getElementById('groupsList'); if(!list) return;
+  let f=groups.filter(g=>g.name.toLowerCase().includes(q));
+  if(!f.length) list.innerHTML='<p class="muted" style="padding:20px;text-align:center">No groups yet. Tap + to create.</p>';
+  else list.innerHTML=f.map(g=>`<div class="card"><div class="row" onclick="openGroup('${g.id}')"><div style="display:flex;gap:10px;align-items:center"><div class="avatar">${g.name[0].toUpperCase()}</div><b>${g.name}</b></div><span>${g.members||0} members ›</span></div></div>`).join('');
+}
+function createGroup(){
+  let name=prompt('Group name:'); if(!name) return;
+  let id=Date.now().toString(); let g={id,name,members:1,msgs:[{me:false,text:'Group created'}]}; groups.unshift(g); localStorage.setItem('dd_groups',JSON.stringify(groups));
+  chats.unshift({id:'g'+id,name,last:'Group created',time:'Now',unread:0,isGroup:true,msgs:g.msgs}); saveChats(); renderGroups(); openChat('g'+id);
+}
+function openGroup(id){let g=groups.find(x=>x.id===id); if(g) openChat('g'+id);}
+function renderCalls(){
+  let list=document.getElementById('callsList'); if(!list) return;
+  if(!calls.length) list.innerHTML='<p class="muted" style="padding:20px;text-align:center">No calls yet.</p>';
+  else list.innerHTML=calls.map(c=>`<div class="card"><div class="row"><b>${c.name}</b><span>${c.type} • ${c.time}</span></div></div>`).join('');
+}
+function newCall(){let n=prompt('Who to call?'); if(!n) return; calls.unshift({name:n,type:'Voice',time:'Now'}); localStorage.setItem('dd_calls',JSON.stringify(calls)); alert('Calling '+n+' (demo)'); renderCalls();}
+function renderStatus(){
+  let list=document.getElementById('statusList'); if(!list) return;
+  list.innerHTML='<div class="card"><div class="row"><b>No status yet</b></div></div>';
+}
+function openThreeDots(){
+  openSheet(`<div class="sheetItem" onclick="showPage('page-you')">👤 Profile</div><div class="sheetItem" onclick="showPage('page-settings-chats')">💬 Chats settings</div><div class="sheetItem" onclick="showPage('page-qr')">▦ My QR</div><div class="sheetItem" onclick="logout()">🚪 Log out</div>`);
+}
+function openChatMenu(){if(!currentChat) return; openSheet(`<div class="sheetItem" onclick="alert('View contact - coming soon')">👤 View contact</div><div class="sheetItem" onclick="if(confirm('Delete chat?')){chats=chats.filter(c=>c.id!==currentChat.id);saveChats();closeSheet();showPage('page-main')}">🗑️ Delete chat</div><div class="sheetItem" onclick="closeSheet()">✕ Close</div>`);}
+function openStatusMenu(){openSheet(`<div class="sheetItem" onclick="alert('Status privacy')">🔒 Status privacy</div><div class="sheetItem" onclick="closeSheet()">✕ Close</div>`);}
+function openSheet(html){document.getElementById('sheetBox').innerHTML=html; document.getElementById('sheetBg').style.display='block';}
+function closeSheet(){document.getElementById('sheetBg').style.display='none';}
+function attachFile(){let inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.onchange=e=>{let r=new FileReader(); r.onload=()=>{if(!currentChat) return; currentChat.msgs.push({me:true,img:r.result,text:''}); currentChat.last='📷 Photo'; saveChats(); renderMessages();}; r.readAsDataURL(e.target.files[0]);}; inp.click();}
+function startRec(e){if(e) e.preventDefault(); let b=document.getElementById('micBtn'); b.classList.add('recording'); b.textContent='🔴';}
+function stopRec(e){if(e) e.preventDefault(); let b=document.getElementById('micBtn'); b.classList.remove('recording'); b.textContent='🎤'; if(currentChat){currentChat.msgs.push({me:true,text:'🎤 Voice message'}); currentChat.last='🎤 Voice'; saveChats(); renderMessages();}}
+function toggleSetting(el,key){el.classList.toggle('on'); settings[key]=el.classList.contains('on'); localStorage.setItem('dd_settings',JSON.stringify(settings));}
+function pickPrivacy(key){
+  let v=prompt('Choose: Everyone / My contacts / Nobody', settings['pv_'+key]||'Everyone'); if(v){settings['pv_'+key]=v; localStorage.setItem('dd_settings',JSON.stringify(settings));
+  let map={lastSeen:'pvLastSeen',profile:'pvProfile',about:'pvAbout',links:'pvLinks',status:'pvStatus',groups:'pvGroups'}; let el=document.getElementById(map[key]); if(el) el.textContent=v;}
+}
+function renderThemeColors(){
+  let colors=['#5f2ee0','#ef4444','#22c55e','#f59e0b','#06b6d4','#ec4899','#8b5cf6','#10b981','#3b82f6','#f97316','#64748b','#000000'];
+  let box=document.getElementById('themeColors'); if(!box) return;
+  box.innerHTML=colors.map(c=>`<div class="colorDot" style="background:${c}" onclick="document.documentElement.style.setProperty('--p','${c}');document.querySelectorAll('.colorDot').forEach(d=>d.classList.remove('sel'));this.classList.add('sel')"></div>`).join('');
+}
+function renderQR(){
+  if(!me) return; document.getElementById('qrName').textContent=me.name+' (@'+me.username+')';
+  document.getElementById('qrImg').src='https://api.qrserver.com/v1/create-qr-code/?size=240x240&data='+encodeURIComponent('DDchat:'+me.username+':'+me.ddid);
+}
+function shareQR(){if(navigator.share) navigator.share({title:'DDchat',text:'Add me on DDchat: @'+(me?.username||'')}); else alert('Copy link: ddchat @'+(me?.username||''));}
+let qrStream=null;
+function openQRScanner(){showPage('page-qrScan'); document.getElementById('qrScanStatus').textContent='Camera needs HTTPS - demo mode';}
+function closeQRScanner(){showPage('page-qr');}
+let camStream=null, capturedImg='';
+function openCamera(){showPage('page-camera'); if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){navigator.mediaDevices.getUserMedia({video:true}).then(s=>{camStream=s; document.getElementById('camVideo').srcObject=s;}).catch(()=>{});}}
+function closeCamera(){if(camStream) camStream.getTracks().forEach(t=>t.stop()); showPage('page-main');}
+function capturePhoto(){
+  let v=document.getElementById('camVideo'); let c=document.getElementById('camCanvas'); c.width=v.videoWidth||640; c.height=v.videoHeight||480; let ctx=c.getContext('2d'); try{ctx.drawImage(v,0,0);}catch(e){} capturedImg=c.toDataURL('image/jpeg',0.8) || ''; openSendPhoto(capturedImg);
+}
+function handleGallery(inp){let f=inp.files[0]; if(!f) return; let r=new FileReader(); r.onload=()=>{capturedImg=r.result; openSendPhoto(capturedImg);}; r.readAsDataURL(f);}
+let sendTargets=new Set();
+function openSendPhoto(img){
+  if(camStream) camStream.getTracks().forEach(t=>t.stop());
+  document.getElementById('sendImg').src=img; sendTargets=new Set();
+  let list=document.getElementById('sendList');
+  list.innerHTML=chats.map(c=>`<div class="row" onclick="toggleSend('${c.id}',this)"><div style="display:flex;gap:10px;align-items:center"><div class="avatar">${c.name[0].toUpperCase()}</div><b>${c.name}</b></div><div class="check" id="chk-${c.id}"></div></div>`).join('');
+  document.getElementById('sendCount').textContent='Select targets'; showPage('page-camSend');
+}
+function toggleSend(id,el){let chk=document.getElementById('chk-'+id); if(sendTargets.has(id)){sendTargets.delete(id); chk.classList.remove('on'); chk.textContent='';} else {sendTargets.add(id); chk.classList.add('on'); chk.textContent='✓';} document.getElementById('sendCount').textContent=sendTargets.size+' selected';}
+function doSendPhoto(){
+  if(!sendTargets.size){alert('Select at least one chat'); return;}
+  sendTargets.forEach(id=>{let c=chats.find(x=>x.id===id); if(c){c.msgs=c.msgs||[]; c.msgs.push({me:true,img:capturedImg,text:''}); c.last='📷 Photo';}});
+  saveChats(); alert('Photo sent'); showPage('page-main');
+}
+function inviteFriend(){if(navigator.share) navigator.share({title:'DDchat',text:'Join DDchat!'}); else alert('Share DDchat with your friends!');}
+
+// FIX: Splash must move forward
+window.addEventListener('load',()=>{
+  renderLang(); renderChats();
+  setTimeout(()=>{
+    if(me && me.username){ showPage('page-main'); }
+    else { showPage('page-lang'); }
+  },1800);
+});
+</script>
+</body>
+</html>
