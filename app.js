@@ -288,13 +288,18 @@ function openChat(chatId,otherUid){
       if(d.from!==currentUser.uid && myLang!=="en" && d.text.trim()){
         const cacheKey = myLang+"::msg::"+d.text.trim();
         const cached = transCache[cacheKey];
-        if(cached){
+        if(cached && !cached.includes("AUTO is invalid")){
           div.innerHTML += `<br><small style="opacity:0.7;display:block;margin-top:3px">→ ${escapeHtml(cached)}</small>`;
         } else {
-          fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(d.text)}&langpair=auto|${myLang}`)
+          let src = "en";
+          if (/[\u4e00-\u9fff]/.test(d.text)) src = "zh";
+          else if (/[\u0600-\u06FF]/.test(d.text)) src = "ar";
+          else if (/[\u0E00-\u0E7F]/.test(d.text)) src = "th";
+          else if (/[а-яА-Я]/.test(d.text)) src = "ru";
+          fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(d.text)}&langpair=${src}|${myLang}`)
             .then(r=>r.json()).then(j=>{
-              const t=j.responseData?.translatedText||"";
-              if(t && t.toLowerCase()!==d.text.toLowerCase()){
+              let t=j.responseData?.translatedText||"";
+              if(t && !t.includes("AUTO is invalid") && t.toLowerCase()!==d.text.toLowerCase()){
                 transCache[cacheKey]=t;
                 localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache));
                 const el=document.getElementById("msg_"+m.id);
