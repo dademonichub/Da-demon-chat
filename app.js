@@ -121,18 +121,15 @@ const LANGUAGES = [
   { code:"cy", name:"Welsh" }
 ];
 
-// --- ONLY LANGUAGE TRANSLATION ADDED HERE - SUPPORTS ALL WORLD LANGUAGES ---
+// --- LANGUAGE SYSTEM ONLY - SUPPORTS ALL 70+ LANGUAGES ---
 const BASE_EN = {
-  chooseLang:"Choose your language", searchLang:"Search language", continue:"Continue", signup:"Sign Up", login:"Log In", createAcc:"Create Account", already:"Already have an account?", newHere:"New here?", name:"Name", username:"Username", email:"Email", password:"Password", forgot:"Forgot password?", chats:"Chats", groups:"Groups", status:"Status", calls:"Calls", settings:"Settings", searchUser:"Search username...", noChats:"No chats yet. Search username above to start.", noUser:"No user found", account:"Account", privacy:"Privacy", notifications:"Notifications", language:"Language", help:"Help", logout:"Logout", editProfile:"Edit Profile", about:"About", save:"Save", postStatus:"Post Status", whatMind:"What's on your mind?", post:"Post", createGroup:"Create Group", groupName:"Group name", create:"Create", noCalls:"No calls yet. Voice/video calling integration coming (use WebRTC).", yourQr:"Your QR", newChat:"New Chat (search above)", newGroup:"New Group", fileSelected:"File selected", profileUpdated:"Profile updated!", reset:"Reset", contactSupport:"Contact support: flatking43@gmail.com"
+  chooseLang:"Choose your language", searchLang:"Search language", continue:"Continue", signup:"Sign Up", login:"Log In", createAcc:"Create Account", already:"Already have an account?", newHere:"New here?", name:"Name", username:"Username", email:"Email", password:"Password", forgot:"Forgot password?", searchUser:"Search username...", noChats:"No chats yet. Search username above to start.", noUser:"No user found", account:"Account", privacy:"Privacy", notifications:"Notifications", language:"Language", help:"Help", logout:"Logout", editProfile:"Edit Profile", about:"About", save:"Save", postStatus:"Post Status", whatMind:"What's on your mind?", post:"Post", createGroup:"Create Group", groupName:"Group name", create:"Create", noCalls:"No calls yet. Voice/video calling integration coming (use WebRTC).", yourQr:"Your QR", newChat:"New Chat (search above)", newGroup:"New Group", fileSelected:"File selected", profileUpdated:"Profile updated!", reset:"Reset", contactSupport:"Contact support: flatking43@gmail.com"
 };
 let currentTranslations = {...BASE_EN};
 let translationCache = JSON.parse(localStorage.getItem("ddchat_translation_cache") || "{}");
-
-function tr(key){ return currentTranslations[key] || BASE_EN[key] || key; }
-
+function tr(k){ return currentTranslations[k] || BASE_EN[k] || k; }
 function applyTranslationsNow(){
-  const langScreenTitle = document.querySelector("#language-screen h1, #language-screen h2");
-  if(langScreenTitle) langScreenTitle.textContent = tr("chooseLang");
+  // ONLY change text that has NO icons - so icons safe
   if($("#langSearch")) $("#langSearch").placeholder = tr("searchLang");
   if($("#langContinue")) $("#langContinue").textContent = tr("continue");
   if($("#authTitle")) $("#authTitle").textContent = isSignup ? tr("signup") : tr("login");
@@ -145,33 +142,26 @@ function applyTranslationsNow(){
   if($("#authEmail")) $("#authEmail").placeholder = tr("email");
   if($("#authPassword")) $("#authPassword").placeholder = tr("password");
   if($("#chatSearch")) $("#chatSearch").placeholder = tr("searchUser");
-  if($("#topTitle")){
-    const active = document.querySelector("#bottomnav button.active")?.dataset.page;
-    if(active) $("#topTitle").textContent = active==="chats" ? "DDchat" : tr(active);
-  }
-  $$("#bottomnav button").forEach(b=>{ if(BASE_EN[b.dataset.page]) b.textContent = tr(b.dataset.page); });
 }
-
 async function loadTranslationsFor(lang){
-  if(lang==="en"){ currentTranslations = {...BASE_EN}; applyTranslationsNow(); return; }
-  if(translationCache[lang]){ currentTranslations = translationCache[lang]; applyTranslationsNow(); return; }
+  if(lang==="en"){ currentTranslations={...BASE_EN}; applyTranslationsNow(); return; }
+  if(translationCache[lang]){ currentTranslations=translationCache[lang]; applyTranslationsNow(); return; }
   applyTranslationsNow();
-  const newTrans = {};
+  const newTrans={};
   for(let k of Object.keys(BASE_EN)){
     try{
-      const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(BASE_EN[k])}&langpair=en|${lang}`);
-      const j = await r.json();
-      newTrans[k] = j.responseData?.translatedText || BASE_EN[k];
-    }catch{ newTrans[k] = BASE_EN[k]; }
+      const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(BASE_EN[k])}&langpair=en|${lang}`);
+      const j=await r.json();
+      newTrans[k]=j.responseData?.translatedText || BASE_EN[k];
+    }catch{ newTrans[k]=BASE_EN[k]; }
   }
-  currentTranslations = newTrans;
-  translationCache[lang] = newTrans;
+  currentTranslations=newTrans;
+  translationCache[lang]=newTrans;
   localStorage.setItem("ddchat_translation_cache", JSON.stringify(translationCache));
   applyTranslationsNow();
 }
-// Load saved language translation on start
 loadTranslationsFor(selectedLang);
-// --- END LANGUAGE TRANSLATION ---
+// --- END LANGUAGE SYSTEM ---
 
 function renderLanguages(filter="") {
   const ul = $("#langList"); ul.innerHTML = "";
@@ -225,7 +215,6 @@ $("#forgotLink").onclick = (e)=>{ e.preventDefault(); showModal(tr("reset"),tr("
 
 onAuthStateChanged(auth, async (user) => {
   authChecked = true;
-  applyTranslationsNow();
   if (user) {
     currentUser = user;
     const snap = await getDoc(doc(db, "users", user.uid));
@@ -252,7 +241,7 @@ $$("#bottomnav button").forEach(btn => {
   btn.onclick = () => {
     $$("#bottomnav button").forEach(b => b.classList.remove("active")); btn.classList.add("active");
     $$(".page").forEach(p => p.classList.remove("active")); $("#page-" + btn.dataset.page).classList.add("active");
-    $("#topTitle").textContent = btn.dataset.page === "chats" ? "DDchat" : tr(btn.dataset.page);
+    $("#topTitle").textContent = btn.dataset.page === "chats" ? "DDchat" : btn.dataset.page.charAt(0).toUpperCase()+btn.dataset.page.slice(1);
   };
 });
 
