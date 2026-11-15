@@ -121,90 +121,54 @@ const LANGUAGES = [
   { code:"cy", name:"Welsh" }
 ];
 
-// === LANGUAGE ONLY - ANY LANGUAGE + FUTURE UPDATES + ICONS SAFE ===
-const BAD_FIX = {
-  "Client en Compte":"Compte", "client en compte":"Compte",
-  "Account":"Compte", "Compte du client":"Compte"
-};
-let transCache = JSON.parse(localStorage.getItem("ddchat_trans_cache") || "{}");
-function getTextNodes(root){
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode: (node)=>{
-      const p = node.parentElement;
-      if(!p) return NodeFilter.FILTER_REJECT;
-      if(["SCRIPT","STYLE","NOSCRIPT"].includes(p.tagName)) return NodeFilter.FILTER_REJECT;
-      if(p.closest("#langList")) return NodeFilter.FILTER_REJECT;
-      if(node.nodeValue.trim().length < 2) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    }
-  });
-  const arr=[]; let n; while(n=walker.nextNode()) arr.push(n); return arr;
+// === LANGUAGE ONLY - ANY LANGUAGE - FUTURE PROOF ===
+const BAD_FIX = { "Client en Compte":"Compte", "Compte du client":"Compte" };
+let transCache = JSON.parse(localStorage.getItem("ddchat_trans_v3") || "{}");
+function getNodes(root){
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>{
+    const p=n.parentElement; if(!p) return NodeFilter.FILTER_REJECT;
+    if(["SCRIPT","STYLE"].includes(p.tagName)) return NodeFilter.FILTER_REJECT;
+    if(p.closest("#langList")) return NodeFilter.FILTER_REJECT;
+    return n.nodeValue.trim().length>1?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT;
+  }});
+  const a=[];let x;while(x=w.nextNode())a.push(x);return a;
 }
 async function translateApp(lang){
-  if(lang==="en"){
-    $$("[data-orig-text]").forEach(p=>{ getTextNodes(p).forEach(t=>{ if(p.dataset.origText) t.nodeValue = p.dataset.origText; }); });
-    $$("[data-orig-ph]").forEach(el=>{ el.placeholder = el.dataset.origPh; });
-    return;
-  }
-  const nodes = getTextNodes(document.body);
-  const need = new Map();
+  if(!lang||lang==="en")return;
+  const nodes=getNodes(document.body);
+  const need=new Map();
   nodes.forEach(tn=>{
-    const parent = tn.parentElement;
-    if(!parent.dataset.origText) parent.dataset.origText = tn.nodeValue;
-    const orig = parent.dataset.origText;
-    const key = lang+"::"+orig.trim();
-    if(transCache[key]){
-      let fixed = transCache[key];
-      if(BAD_FIX[fixed]) fixed = BAD_FIX[fixed];
-      tn.nodeValue = fixed;
-    } else {
-      if(!need.has(orig)) need.set(orig, []);
-      need.get(orig).push(tn);
-    }
+    const p=tn.parentElement; if(!p.dataset.o) p.dataset.o=tn.nodeValue;
+    const orig=p.dataset.o; const key=lang+"::"+orig.trim();
+    if(transCache[key]){ let t=transCache[key]; if(BAD_FIX[t])t=BAD_FIX[t]; tn.nodeValue=t; }
+    else{ if(!need.has(orig))need.set(orig,[]); need.get(orig).push(tn); }
   });
-  // placeholders
-  $$("input[placeholder]").forEach(el=>{
-    if(!el.dataset.origPh) el.dataset.origPh = el.placeholder;
-    const orig = el.dataset.origPh;
-    const key = lang+"::"+orig;
-    if(transCache[key]) el.placeholder = transCache[key];
-    else need.set(orig, []);
+  $$("input[placeholder], textarea[placeholder]").forEach(el=>{
+    if(!el.dataset.oPh) el.dataset.oPh=el.placeholder;
+    const orig=el.dataset.oPh; const key=lang+"::"+orig.trim();
+    if(transCache[key]) el.placeholder=transCache[key];
+    else if(orig.trim()){ if(!need.has(orig))need.set(orig,[]); }
   });
-
-  if(need.size>0){
-    const list = Array.from(need.keys());
-    const res = await Promise.all(list.map(async orig=>{
+  if(need.size){
+    const res=await Promise.all([...need.keys()].map(async o=>{
       try{
-        const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(orig.trim())}&langpair=en|${lang}`);
-        const j=await r.json();
-        let t = j.responseData?.translatedText || orig;
-        if(BAD_FIX[t]) t = BAD_FIX[t];
-        if(BAD_FIX[orig.trim()]) t = BAD_FIX[orig.trim()];
-        return [orig, t];
-      }catch{ return [orig, orig]; }
+        const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(o.trim())}&langpair=en|${lang}`);
+        const j=await r.json(); let t=j.responseData?.translatedText||o;
+        if(BAD_FIX[t])t=BAD_FIX[t]; return [o,t];
+      }catch{ return [o,o]; }
     }));
-    res.forEach(([orig, trans])=>{
-      const key = lang+"::"+orig.trim();
-      transCache[key] = trans;
-      const key2 = lang+"::"+orig;
-      transCache[key2] = trans;
-      (need.get(orig)||[]).forEach(tn=>{
-        if(tn.nodeType===3) tn.nodeValue = trans;
-        else if(tn.placeholder !== undefined) tn.placeholder = trans;
-      });
-      // for placeholder inputs
-      $$("input[placeholder]").forEach(el=>{
-        if(el.dataset.origPh===orig) el.placeholder = trans;
-      });
+    res.forEach(([o,t])=>{
+      transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t;
+      (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; });
+      $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===o) el.placeholder=t; });
     });
-    localStorage.setItem("ddchat_trans_cache", JSON.stringify(transCache));
+    localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache));
   }
 }
-const mo = new MutationObserver(()=>{ if(selectedLang!=="en") translateApp(selectedLang); });
-mo.observe(document.body, {childList:true, subtree:true});
-function loadLang(lang){ selectedLang=lang; localStorage.setItem("ddchat_lang", lang); translateApp(lang); }
-loadLang(selectedLang);
-// === END LANGUAGE ===
+new MutationObserver(()=>{ const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en")translateApp(l); }).observe(document.body,{childList:true,subtree:true});
+const savedLang = localStorage.getItem("ddchat_lang");
+if(savedLang && savedLang!=="en") setTimeout(()=>translateApp(savedLang), 600);
+// === END LANGUAGE ONLY ===
 
 function renderLanguages(filter="") {
   const ul = $("#langList"); ul.innerHTML = "";
@@ -212,13 +176,13 @@ function renderLanguages(filter="") {
     const li = document.createElement("li");
     li.textContent = l.name;
     if (l.code === selectedLang) li.classList.add("selected");
-    li.onclick = () => { selectedLang = l.code; loadLang(l.code); $$("#langList li").forEach(x=>x.classList.remove("selected")); li.classList.add("selected"); };
+    li.onclick = () => { selectedLang = l.code; $$("#langList li").forEach(x=>x.classList.remove("selected")); li.classList.add("selected"); };
     ul.appendChild(li);
   });
 }
 renderLanguages();
 $("#langSearch").oninput = (e) => renderLanguages(e.target.value);
-$("#langContinue").onclick = () => { localStorage.setItem("ddchat_lang", selectedLang); loadLang(selectedLang); showScreen("auth-screen"); };
+$("#langContinue").onclick = () => { localStorage.setItem("ddchat_lang", selectedLang); translateApp(selectedLang); showScreen("auth-screen"); };
 
 $("#switchAuth").onclick = (e) => {
   e.preventDefault(); isSignup = !isSignup;
@@ -229,7 +193,6 @@ $("#switchAuth").onclick = (e) => {
   $("#authName").style.display = isSignup ? "block" : "none";
   $("#authUsername").style.display = isSignup ? "block" : "none";
   $("#forgotLink").style.display = isSignup ? "none" : "block";
-  if(selectedLang!=="en") translateApp(selectedLang);
 };
 
 $("#authBtn").onclick = async () => {
@@ -252,9 +215,8 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
     const snap = await getDoc(doc(db, "users", user.uid));
-    if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase(); if(d.lang){ selectedLang=d.lang; loadLang(d.lang); } }
+    if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase(); }
     showScreen("app"); loadChats(); loadGroups(); loadStatus(); loadCalls();
-    setTimeout(()=>translateApp(selectedLang), 300);
   } else {
     currentUser=null;
     if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen");
@@ -267,7 +229,6 @@ $$("#bottomnav button").forEach(btn => {
     $$("#bottomnav button").forEach(b => b.classList.remove("active")); btn.classList.add("active");
     $$(".page").forEach(p => p.classList.remove("active")); $("#page-" + btn.dataset.page).classList.add("active");
     $("#topTitle").textContent = btn.dataset.page === "chats" ? "DDchat" : btn.dataset.page.charAt(0).toUpperCase()+btn.dataset.page.slice(1);
-    if(selectedLang!=="en") setTimeout(()=>translateApp(selectedLang), 50);
   };
 });
 
@@ -276,7 +237,7 @@ function loadChats(){
   const q = query(collection(db, "chats"), where("members","array-contains",currentUser.uid));
   onSnapshot(q,(snap)=>{
     const list=$("#chatList"); list.innerHTML="";
-    if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username above to start.</li>"; if(selectedLang!=="en") translateApp(selectedLang); return; }
+    if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username above to start.</li>"; return; }
     snap.forEach(d=>{
       const data=d.data();
       const unread = data.unreadCount?.[currentUser.uid] || 0;
@@ -284,7 +245,6 @@ function loadChats(){
       li.innerHTML=`<div class="avatar">${(data.lastMsg||"D")[0].toUpperCase()}</div><div style="flex:1"><b>Chat</b><br><small>${data.lastMsg||"Start chatting"}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`;
       li.onclick=()=>openChat(d.id,data.members.find(m=>m!==currentUser.uid)); list.appendChild(li);
     });
-    if(selectedLang!=="en") translateApp(selectedLang);
   });
 }
 
@@ -294,7 +254,6 @@ $("#chatSearch").oninput = async (e)=>{
   const snap=await getDocs(q1); const list=$("#chatList"); list.innerHTML="";
   snap.forEach(d=>{ const u=d.data(); if(u.uid===currentUser.uid) return; const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${u.name[0]}</div><div><b>${u.name}</b><br><small>@${u.username}</small></div>`; li.onclick=()=>startChat(u.uid); list.appendChild(li); });
   if(list.innerHTML==="") list.innerHTML="<li style='padding:15px'>No user found</li>";
-  if(selectedLang!=="en") translateApp(selectedLang);
 };
 
 async function startChat(otherUid){
@@ -345,7 +304,6 @@ $("#editProfileBtn").onclick= async ()=>{
       $("#profileName").textContent=name; $("#profileAvatar").textContent=name[0].toUpperCase();
       $("#modal").classList.add("hidden"); alert("Profile updated!");
     };
-    if(selectedLang!=="en") translateApp(selectedLang);
   },100);
 };
 
@@ -357,7 +315,6 @@ $("#postStatusBtn").onclick=()=>{
       await addDoc(collection(db,"status"),{uid:currentUser.uid,text,ts:serverTimestamp()});
       $("#modal").classList.add("hidden");
     };
-    if(selectedLang!=="en") translateApp(selectedLang);
   },100);
 };
 function loadStatus(){
@@ -365,7 +322,6 @@ function loadStatus(){
   onSnapshot(q,(snap)=>{
     const list=$("#statusList"); list.innerHTML="";
     snap.forEach(d=>{ const s=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${s.uid.slice(0,2)}</div><div><b>Status</b><br><small>${escapeHtml(s.text)}</small></div>`; list.appendChild(li); });
-    if(selectedLang!=="en") translateApp(selectedLang);
   });
 }
 
@@ -377,19 +333,18 @@ $("#createGroupBtn").onclick=()=>{
       await addDoc(collection(db,"groups"),{name,members:[currentUser.uid],createdBy:currentUser.uid,ts:serverTimestamp()});
       $("#modal").classList.add("hidden");
     };
-    if(selectedLang!=="en") translateApp(selectedLang);
   },100);
 };
 function loadGroups(){
   const q=query(collection(db,"groups"), where("members","array-contains",currentUser.uid));
-  onSnapshot(q,(snap)=>{ const list=$("#groupList"); list.innerHTML=""; snap.forEach(d=>{ const g=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">G</div><div><b>${g.name}</b><br><small>${g.members.length} members</small></div>`; list.appendChild(li); }); if(selectedLang!=="en") translateApp(selectedLang); });
+  onSnapshot(q,(snap)=>{ const list=$("#groupList"); list.innerHTML=""; snap.forEach(d=>{ const g=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">G</div><div><b>${g.name}</b><br><small>${g.members.length} members</small></div>`; list.appendChild(li); }); });
 }
 
-function loadCalls(){ $("#callList").innerHTML="<li style='padding:15px;color:#8696a0'>No calls yet. Voice/video calling integration coming (use WebRTC).</li>"; if(selectedLang!=="en") translateApp(selectedLang); }
+function loadCalls(){ $("#callList").innerHTML="<li style='padding:15px;color:#8696a0'>No calls yet. Voice/video calling integration coming (use WebRTC).</li>"; }
 
-$("#qrBtn").onclick=()=>{ const url=`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${currentUser.uid}`; showModal("Your QR",`<img src="${url}" style="width:100%;border-radius:8px"/>`); if(selectedLang!=="en") setTimeout(()=>translateApp(selectedLang), 100); };
+$("#qrBtn").onclick=()=>{ const url=`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${currentUser.uid}`; showModal("Your QR",`<img src="${url}" style="width:100%;border-radius:8px"/>`); };
 $("#cameraBtn").onclick=()=>{ $("#fileInput").click(); };
-$("#plusBtn").onclick=()=>{ showModal("New",`<button class="btn" onclick="document.getElementById('chatSearch').focus();document.getElementById('modal').classList.add('hidden')">💬 New Chat (search above)</button><br><br><button class="btn" id="newGroupModal">👥 New Group</button>`); setTimeout(()=>{ $("#newGroupModal").onclick=()=>{ $("#modal").classList.add("hidden"); $("#createGroupBtn").click(); }; if(selectedLang!=="en") translateApp(selectedLang); },100); };
+$("#plusBtn").onclick=()=>{ showModal("New",`<button class="btn" onclick="document.getElementById('chatSearch').focus();document.getElementById('modal').classList.add('hidden')">💬 New Chat (search above)</button><br><br><button class="btn" id="newGroupModal">👥 New Group</button>`); setTimeout(()=>{ $("#newGroupModal").onclick=()=>{ $("#modal").classList.add("hidden"); $("#createGroupBtn").click(); }; },100); };
 $("#fileInput").onchange=(e)=>{ const file=e.target.files[0]; if(file) alert("File selected: "+file.name+" - upload to Firebase Storage coming next"); };
 
 $$(".settings-list li").forEach(li=>{
@@ -398,7 +353,6 @@ $$(".settings-list li").forEach(li=>{
     if(s==="logout"){ signOut(auth); return; }
     if(s==="account"){ $("#editProfileBtn").click(); return; }
     showModal(li.textContent.trim(),"<p>"+s+" settings coming soon - built.</p>");
-    if(selectedLang!=="en") setTimeout(()=>translateApp(selectedLang), 100);
   };
 });
 
