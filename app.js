@@ -121,88 +121,89 @@ const LANGUAGES = [
   { code:"cy", name:"Welsh" }
 ];
 
-// === LANGUAGE ONLY - WHOLE APP - ICONS SAFE - FAST ===
-const BASE_EN = {
-  chooseLang:"Choose your language", searchLang:"Search language", continue:"Continue",
-  signup:"Sign Up", login:"Log In", createAcc:"Create Account", already:"Already have an account?", newHere:"New here?",
-  name:"Name", username:"Username", email:"Email", password:"Password", forgot:"Forgot password?",
-  searchUser:"Search username...", noChats:"No chats yet. Search username above to start.", noUser:"No user found",
-  editProfile:"Edit Profile", qrCode:"QR Code", account:"Account", privacy:"Privacy", chats:"Chats",
-  appearance:"Appearance", notifications:"Notifications", storage:"Storage and Data", helpFeedback:"Help & Feedback",
-  logout:"Log Out", you:"You", groups:"Groups", calls:"Calls", status:"Status",
-  postStatus:"Post Status", whatMind:"What's on your mind?", post:"Post", createGroup:"Create Group",
-  groupName:"Group name", create:"Create", noCalls:"No calls yet. Voice/video calling integration coming (use WebRTC).",
-  yourQr:"Your QR", newChat:"New Chat (search above)", newGroup:"New Group", new:"New",
-  fileSelected:"File selected", profileUpdated:"Profile updated!", reset:"Reset", save:"Save", about:"About",
-  startChatting:"Start chatting", members:"members"
+// === LANGUAGE ONLY - ANY LANGUAGE + FUTURE UPDATES + ICONS SAFE ===
+const BAD_FIX = {
+  "Client en Compte":"Compte", "client en compte":"Compte",
+  "Account":"Compte", "Compte du client":"Compte"
 };
-let currentTranslations = {...BASE_EN};
-let translationCache = JSON.parse(localStorage.getItem("ddchat_translation_cache") || "{}");
-function tr(k){ return currentTranslations[k] || BASE_EN[k] || k; }
-function setLabelSafe(btn, translated){
-  if(btn.innerHTML.includes("<br>")){
-    const iconPart = btn.innerHTML.split("<br>")[0];
-    btn.innerHTML = iconPart + "<br>" + translated;
-  } else {
-    const icon = btn.querySelector("i, svg, img");
-    if(icon){
-      const textNode = Array.from(btn.childNodes).find(n=>n.nodeType===3);
-      if(textNode) textNode.textContent = " " + translated;
-      else btn.innerHTML = icon.outerHTML + " " + translated;
-    } else {
-      const firstText = Array.from(btn.childNodes).find(n=>n.nodeType===3);
-      if(firstText) firstText.textContent = translated;
+let transCache = JSON.parse(localStorage.getItem("ddchat_trans_cache") || "{}");
+function getTextNodes(root){
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node)=>{
+      const p = node.parentElement;
+      if(!p) return NodeFilter.FILTER_REJECT;
+      if(["SCRIPT","STYLE","NOSCRIPT"].includes(p.tagName)) return NodeFilter.FILTER_REJECT;
+      if(p.closest("#langList")) return NodeFilter.FILTER_REJECT;
+      if(node.nodeValue.trim().length < 2) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
     }
+  });
+  const arr=[]; let n; while(n=walker.nextNode()) arr.push(n); return arr;
+}
+async function translateApp(lang){
+  if(lang==="en"){
+    $$("[data-orig-text]").forEach(p=>{ getTextNodes(p).forEach(t=>{ if(p.dataset.origText) t.nodeValue = p.dataset.origText; }); });
+    $$("[data-orig-ph]").forEach(el=>{ el.placeholder = el.dataset.origPh; });
+    return;
+  }
+  const nodes = getTextNodes(document.body);
+  const need = new Map();
+  nodes.forEach(tn=>{
+    const parent = tn.parentElement;
+    if(!parent.dataset.origText) parent.dataset.origText = tn.nodeValue;
+    const orig = parent.dataset.origText;
+    const key = lang+"::"+orig.trim();
+    if(transCache[key]){
+      let fixed = transCache[key];
+      if(BAD_FIX[fixed]) fixed = BAD_FIX[fixed];
+      tn.nodeValue = fixed;
+    } else {
+      if(!need.has(orig)) need.set(orig, []);
+      need.get(orig).push(tn);
+    }
+  });
+  // placeholders
+  $$("input[placeholder]").forEach(el=>{
+    if(!el.dataset.origPh) el.dataset.origPh = el.placeholder;
+    const orig = el.dataset.origPh;
+    const key = lang+"::"+orig;
+    if(transCache[key]) el.placeholder = transCache[key];
+    else need.set(orig, []);
+  });
+
+  if(need.size>0){
+    const list = Array.from(need.keys());
+    const res = await Promise.all(list.map(async orig=>{
+      try{
+        const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(orig.trim())}&langpair=en|${lang}`);
+        const j=await r.json();
+        let t = j.responseData?.translatedText || orig;
+        if(BAD_FIX[t]) t = BAD_FIX[t];
+        if(BAD_FIX[orig.trim()]) t = BAD_FIX[orig.trim()];
+        return [orig, t];
+      }catch{ return [orig, orig]; }
+    }));
+    res.forEach(([orig, trans])=>{
+      const key = lang+"::"+orig.trim();
+      transCache[key] = trans;
+      const key2 = lang+"::"+orig;
+      transCache[key2] = trans;
+      (need.get(orig)||[]).forEach(tn=>{
+        if(tn.nodeType===3) tn.nodeValue = trans;
+        else if(tn.placeholder !== undefined) tn.placeholder = trans;
+      });
+      // for placeholder inputs
+      $$("input[placeholder]").forEach(el=>{
+        if(el.dataset.origPh===orig) el.placeholder = trans;
+      });
+    });
+    localStorage.setItem("ddchat_trans_cache", JSON.stringify(transCache));
   }
 }
-function applyTranslationsNow(){
-  if($("#langSearch")) $("#langSearch").placeholder = tr("searchLang");
-  if($("#langContinue")) $("#langContinue").textContent = tr("continue");
-  if($("#authTitle")) $("#authTitle").textContent = isSignup ? tr("signup") : tr("login");
-  if($("#authBtn")) $("#authBtn").textContent = isSignup ? tr("createAcc") : tr("login");
-  if($("#switchText")) $("#switchText").textContent = isSignup ? tr("already") : tr("newHere");
-  if($("#switchAuth")) $("#switchAuth").textContent = isSignup ? tr("login") : tr("signup");
-  if($("#forgotLink")) $("#forgotLink").textContent = tr("forgot");
-  if($("#authName")) $("#authName").placeholder = tr("name");
-  if($("#authUsername")) $("#authUsername").placeholder = tr("username");
-  if($("#authEmail")) $("#authEmail").placeholder = tr("email");
-  if($("#authPassword")) $("#authPassword").placeholder = tr("password");
-  if($("#chatSearch")) $("#chatSearch").placeholder = tr("searchUser");
-  // Whole app - settings
-  $$(".settings-list li").forEach(li=>{
-    const s = li.dataset.setting;
-    const map = { account:"account", privacy:"privacy", chats:"chats", appearance:"appearance", notifications:"notifications", storage:"storage", help:"helpFeedback", logout:"logout" };
-    if(map[s]){
-      const txtNode = Array.from(li.childNodes).find(n=>n.nodeType===3 && n.textContent.trim());
-      if(txtNode) txtNode.textContent = tr(map[s]) + " ";
-    }
-  });
-  // Bottom nav - keep icons
-  $$("#bottomnav button").forEach(btn=>{
-    const pg = btn.dataset.page;
-    if(pg==="chats") setLabelSafe(btn, tr("chats"));
-    if(pg==="groups") setLabelSafe(btn, tr("groups"));
-    if(pg==="status") setLabelSafe(btn, tr("status"));
-    if(pg==="calls") setLabelSafe(btn, tr("calls"));
-    if(pg==="settings") setLabelSafe(btn, tr("you"));
-  });
-}
-async function loadTranslationsFor(lang){
-  if(lang==="en"){ currentTranslations={...BASE_EN}; applyTranslationsNow(); return; }
-  if(translationCache[lang]){ currentTranslations=translationCache[lang]; applyTranslationsNow(); return; }
-  applyTranslationsNow();
-  const entries = await Promise.all(Object.keys(BASE_EN).map(async k=>{
-    try{
-      const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(BASE_EN[k])}&langpair=en|${lang}`);
-      const j=await r.json(); return [k, j.responseData?.translatedText || BASE_EN[k]];
-    }catch{ return [k, BASE_EN[k]]; }
-  }));
-  currentTranslations = Object.fromEntries(entries);
-  translationCache[lang]=currentTranslations;
-  localStorage.setItem("ddchat_translation_cache", JSON.stringify(translationCache));
-  applyTranslationsNow();
-}
-loadTranslationsFor(selectedLang);
+const mo = new MutationObserver(()=>{ if(selectedLang!=="en") translateApp(selectedLang); });
+mo.observe(document.body, {childList:true, subtree:true});
+function loadLang(lang){ selectedLang=lang; localStorage.setItem("ddchat_lang", lang); translateApp(lang); }
+loadLang(selectedLang);
 // === END LANGUAGE ===
 
 function renderLanguages(filter="") {
@@ -211,33 +212,24 @@ function renderLanguages(filter="") {
     const li = document.createElement("li");
     li.textContent = l.name;
     if (l.code === selectedLang) li.classList.add("selected");
-    li.onclick = async () => { 
-      selectedLang = l.code; 
-      localStorage.setItem("ddchat_lang", l.code);
-      $$("#langList li").forEach(x=>x.classList.remove("selected")); 
-      li.classList.add("selected"); 
-      await loadTranslationsFor(l.code);
-    };
+    li.onclick = () => { selectedLang = l.code; loadLang(l.code); $$("#langList li").forEach(x=>x.classList.remove("selected")); li.classList.add("selected"); };
     ul.appendChild(li);
   });
 }
 renderLanguages();
 $("#langSearch").oninput = (e) => renderLanguages(e.target.value);
-$("#langContinue").onclick = async () => { 
-  localStorage.setItem("ddchat_lang", selectedLang); 
-  await loadTranslationsFor(selectedLang);
-  showScreen("auth-screen"); 
-};
+$("#langContinue").onclick = () => { localStorage.setItem("ddchat_lang", selectedLang); loadLang(selectedLang); showScreen("auth-screen"); };
 
 $("#switchAuth").onclick = (e) => {
   e.preventDefault(); isSignup = !isSignup;
-  $("#authTitle").textContent = isSignup ? tr("signup") : tr("login");
-  $("#authBtn").textContent = isSignup ? tr("createAcc") : tr("login");
-  $("#switchText").textContent = isSignup ? tr("already") : tr("newHere");
-  $("#switchAuth").textContent = isSignup ? tr("login") : tr("signup");
+  $("#authTitle").textContent = isSignup ? "Sign Up" : "Log In";
+  $("#authBtn").textContent = isSignup ? "Create Account" : "Log In";
+  $("#switchText").textContent = isSignup ? "Already have an account?" : "New here?";
+  $("#switchAuth").textContent = isSignup ? "Log In" : "Sign Up";
   $("#authName").style.display = isSignup ? "block" : "none";
   $("#authUsername").style.display = isSignup ? "block" : "none";
   $("#forgotLink").style.display = isSignup ? "none" : "block";
+  if(selectedLang!=="en") translateApp(selectedLang);
 };
 
 $("#authBtn").onclick = async () => {
@@ -253,21 +245,16 @@ $("#authBtn").onclick = async () => {
   } catch (err) { alert(err.message); }
 };
 
-$("#forgotLink").onclick = (e)=>{ e.preventDefault(); showModal(tr("reset"),"Contact support: flatking43@gmail.com"); };
+$("#forgotLink").onclick = (e)=>{ e.preventDefault(); showModal("Reset","Contact support: flatking43@gmail.com"); };
 
 onAuthStateChanged(auth, async (user) => {
   authChecked = true;
   if (user) {
     currentUser = user;
     const snap = await getDoc(doc(db, "users", user.uid));
-    if (snap.exists()) { 
-      const d = snap.data(); 
-      $("#profileName").textContent = d.name; 
-      $("#profileUsername").textContent = "@"+d.username; 
-      $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase();
-      if(d.lang && d.lang!==selectedLang){ selectedLang=d.lang; localStorage.setItem("ddchat_lang", d.lang); await loadTranslationsFor(d.lang); }
-    }
+    if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase(); if(d.lang){ selectedLang=d.lang; loadLang(d.lang); } }
     showScreen("app"); loadChats(); loadGroups(); loadStatus(); loadCalls();
+    setTimeout(()=>translateApp(selectedLang), 300);
   } else {
     currentUser=null;
     if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen");
@@ -279,14 +266,8 @@ $$("#bottomnav button").forEach(btn => {
   btn.onclick = () => {
     $$("#bottomnav button").forEach(b => b.classList.remove("active")); btn.classList.add("active");
     $$(".page").forEach(p => p.classList.remove("active")); $("#page-" + btn.dataset.page).classList.add("active");
-    if($("#topTitle")){
-      const pg = btn.dataset.page;
-      if(pg==="chats") $("#topTitle").textContent = "DDchat";
-      else if(pg==="groups") $("#topTitle").textContent = tr("groups");
-      else if(pg==="status") $("#topTitle").textContent = tr("status");
-      else if(pg==="calls") $("#topTitle").textContent = tr("calls");
-      else $("#topTitle").textContent = tr("you");
-    }
+    $("#topTitle").textContent = btn.dataset.page === "chats" ? "DDchat" : btn.dataset.page.charAt(0).toUpperCase()+btn.dataset.page.slice(1);
+    if(selectedLang!=="en") setTimeout(()=>translateApp(selectedLang), 50);
   };
 });
 
@@ -295,14 +276,15 @@ function loadChats(){
   const q = query(collection(db, "chats"), where("members","array-contains",currentUser.uid));
   onSnapshot(q,(snap)=>{
     const list=$("#chatList"); list.innerHTML="";
-    if(snap.empty){ list.innerHTML=`<li style='padding:15px;color:#8696a0'>${tr("noChats")}</li>`; return; }
+    if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username above to start.</li>"; if(selectedLang!=="en") translateApp(selectedLang); return; }
     snap.forEach(d=>{
       const data=d.data();
       const unread = data.unreadCount?.[currentUser.uid] || 0;
       const li=document.createElement("li");
-      li.innerHTML=`<div class="avatar">${(data.lastMsg||"D")[0].toUpperCase()}</div><div style="flex:1"><b>Chat</b><br><small>${data.lastMsg||tr("startChatting")}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`;
+      li.innerHTML=`<div class="avatar">${(data.lastMsg||"D")[0].toUpperCase()}</div><div style="flex:1"><b>Chat</b><br><small>${data.lastMsg||"Start chatting"}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`;
       li.onclick=()=>openChat(d.id,data.members.find(m=>m!==currentUser.uid)); list.appendChild(li);
     });
+    if(selectedLang!=="en") translateApp(selectedLang);
   });
 }
 
@@ -311,7 +293,8 @@ $("#chatSearch").oninput = async (e)=>{
   const q1=query(collection(db,"users"), where("username","==",term));
   const snap=await getDocs(q1); const list=$("#chatList"); list.innerHTML="";
   snap.forEach(d=>{ const u=d.data(); if(u.uid===currentUser.uid) return; const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${u.name[0]}</div><div><b>${u.name}</b><br><small>@${u.username}</small></div>`; li.onclick=()=>startChat(u.uid); list.appendChild(li); });
-  if(list.innerHTML==="") list.innerHTML=`<li style='padding:15px'>${tr("noUser")}</li>`;
+  if(list.innerHTML==="") list.innerHTML="<li style='padding:15px'>No user found</li>";
+  if(selectedLang!=="en") translateApp(selectedLang);
 };
 
 async function startChat(otherUid){
@@ -350,29 +333,31 @@ document.addEventListener("click", async (e)=>{
 
 $("#editProfileBtn").onclick= async ()=>{
   const snap=await getDoc(doc(db,"users",currentUser.uid)); const d=snap.data();
-  showModal(tr("editProfile"),`
-    <input id="editName" value="${d.name}" placeholder="${tr("name")}" style="width:100%;margin:8px 0;padding:10px;border-radius:8px"/>
-    <input id="editAbout" value="${d.about}" placeholder="${tr("about")}" style="width:100%;margin:8px 0;padding:10px;border-radius:8px"/>
-    <button class="btn" id="saveProfile">${tr("save")}</button>
+  showModal("Edit Profile",`
+    <input id="editName" value="${d.name}" placeholder="Name" style="width:100%;margin:8px 0;padding:10px;border-radius:8px"/>
+    <input id="editAbout" value="${d.about}" placeholder="About" style="width:100%;margin:8px 0;padding:10px;border-radius:8px"/>
+    <button class="btn" id="saveProfile">Save</button>
   `);
   setTimeout(()=>{
     $("#saveProfile").onclick= async ()=>{
       const name=$("#editName").value.trim(); const about=$("#editAbout").value.trim();
       await updateDoc(doc(db,"users",currentUser.uid),{name,about,avatar:name[0].toUpperCase()});
       $("#profileName").textContent=name; $("#profileAvatar").textContent=name[0].toUpperCase();
-      $("#modal").classList.add("hidden"); alert(tr("profileUpdated"));
+      $("#modal").classList.add("hidden"); alert("Profile updated!");
     };
+    if(selectedLang!=="en") translateApp(selectedLang);
   },100);
 };
 
 $("#postStatusBtn").onclick=()=>{
-  showModal(tr("postStatus"),`<input id="statusText" placeholder="${tr("whatMind")}" style="width:100%;padding:10px"/><button class="btn" id="saveStatus">${tr("post")}</button>`);
+  showModal("Post Status",`<input id="statusText" placeholder="What's on your mind?" style="width:100%;padding:10px"/><button class="btn" id="saveStatus">Post</button>`);
   setTimeout(()=>{
     $("#saveStatus").onclick= async ()=>{
       const text=$("#statusText").value.trim(); if(!text) return;
       await addDoc(collection(db,"status"),{uid:currentUser.uid,text,ts:serverTimestamp()});
       $("#modal").classList.add("hidden");
     };
+    if(selectedLang!=="en") translateApp(selectedLang);
   },100);
 };
 function loadStatus(){
@@ -380,30 +365,32 @@ function loadStatus(){
   onSnapshot(q,(snap)=>{
     const list=$("#statusList"); list.innerHTML="";
     snap.forEach(d=>{ const s=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${s.uid.slice(0,2)}</div><div><b>Status</b><br><small>${escapeHtml(s.text)}</small></div>`; list.appendChild(li); });
+    if(selectedLang!=="en") translateApp(selectedLang);
   });
 }
 
 $("#createGroupBtn").onclick=()=>{
-  showModal(tr("createGroup"),`<input id="groupName" placeholder="${tr("groupName")}" style="width:100%;padding:10px"/><button class="btn" id="saveGroup">${tr("create")}</button>`);
+  showModal("Create Group",`<input id="groupName" placeholder="Group name" style="width:100%;padding:10px"/><button class="btn" id="saveGroup">Create</button>`);
   setTimeout(()=>{
     $("#saveGroup").onclick= async ()=>{
       const name=$("#groupName").value.trim(); if(!name) return;
       await addDoc(collection(db,"groups"),{name,members:[currentUser.uid],createdBy:currentUser.uid,ts:serverTimestamp()});
       $("#modal").classList.add("hidden");
     };
+    if(selectedLang!=="en") translateApp(selectedLang);
   },100);
 };
 function loadGroups(){
   const q=query(collection(db,"groups"), where("members","array-contains",currentUser.uid));
-  onSnapshot(q,(snap)=>{ const list=$("#groupList"); list.innerHTML=""; snap.forEach(d=>{ const g=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">G</div><div><b>${g.name}</b><br><small>${g.members.length} ${tr("members")}</small></div>`; list.appendChild(li); }); });
+  onSnapshot(q,(snap)=>{ const list=$("#groupList"); list.innerHTML=""; snap.forEach(d=>{ const g=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">G</div><div><b>${g.name}</b><br><small>${g.members.length} members</small></div>`; list.appendChild(li); }); if(selectedLang!=="en") translateApp(selectedLang); });
 }
 
-function loadCalls(){ $("#callList").innerHTML=`<li style='padding:15px;color:#8696a0'>${tr("noCalls")}</li>`; }
+function loadCalls(){ $("#callList").innerHTML="<li style='padding:15px;color:#8696a0'>No calls yet. Voice/video calling integration coming (use WebRTC).</li>"; if(selectedLang!=="en") translateApp(selectedLang); }
 
-$("#qrBtn").onclick=()=>{ const url=`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${currentUser.uid}`; showModal(tr("yourQr"),`<img src="${url}" style="width:100%;border-radius:8px"/>`); };
+$("#qrBtn").onclick=()=>{ const url=`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${currentUser.uid}`; showModal("Your QR",`<img src="${url}" style="width:100%;border-radius:8px"/>`); if(selectedLang!=="en") setTimeout(()=>translateApp(selectedLang), 100); };
 $("#cameraBtn").onclick=()=>{ $("#fileInput").click(); };
-$("#plusBtn").onclick=()=>{ showModal(tr("new"),`<button class="btn" onclick="document.getElementById('chatSearch').focus();document.getElementById('modal').classList.add('hidden')">💬 ${tr("newChat")}</button><br><br><button class="btn" id="newGroupModal">👥 ${tr("newGroup")}</button>`); setTimeout(()=>{ $("#newGroupModal").onclick=()=>{ $("#modal").classList.add("hidden"); $("#createGroupBtn").click(); }; },100); };
-$("#fileInput").onchange=(e)=>{ const file=e.target.files[0]; if(file) alert(`${tr("fileSelected")}: ${file.name}`); };
+$("#plusBtn").onclick=()=>{ showModal("New",`<button class="btn" onclick="document.getElementById('chatSearch').focus();document.getElementById('modal').classList.add('hidden')">💬 New Chat (search above)</button><br><br><button class="btn" id="newGroupModal">👥 New Group</button>`); setTimeout(()=>{ $("#newGroupModal").onclick=()=>{ $("#modal").classList.add("hidden"); $("#createGroupBtn").click(); }; if(selectedLang!=="en") translateApp(selectedLang); },100); };
+$("#fileInput").onchange=(e)=>{ const file=e.target.files[0]; if(file) alert("File selected: "+file.name+" - upload to Firebase Storage coming next"); };
 
 $$(".settings-list li").forEach(li=>{
   li.onclick=()=>{
@@ -411,6 +398,7 @@ $$(".settings-list li").forEach(li=>{
     if(s==="logout"){ signOut(auth); return; }
     if(s==="account"){ $("#editProfileBtn").click(); return; }
     showModal(li.textContent.trim(),"<p>"+s+" settings coming soon - built.</p>");
+    if(selectedLang!=="en") setTimeout(()=>translateApp(selectedLang), 100);
   };
 });
 
