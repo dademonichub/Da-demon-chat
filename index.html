@@ -20,7 +20,7 @@
 .sheetBg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:60;display:none}.sheet{position:absolute;bottom:0;left:0;right:0;background:#111b21;border-radius:20px 20px 0 0;max-height:85vh;overflow:auto}.sheetItem{display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;border-bottom:1px solid #1c1e21}
 #aboutSugs .row.active{background:#eee}
 </style></head><body>
-<div id="splash" class="page active splash"><div><div class="logo" style="padding:0;overflow:hidden;background:none"><img src="icon-512.png" style="width:100%;height:100%;object-fit:cover;border-radius:28px"></div><h1 style="font-size:28px;font-weight:800">DDchat</h1><p style="color:#8696a0;margin-top:12px">Welcome to DDchat</p><p style="margin-top:40px;font-size:12px;color:#555">from Da Demon Hub</p></div></div>
+<div id="splash" class="page active splash"><div><div class="logo" style="padding:0;overflow:hidden;background:none"><img src="icon-512.png.png" style="width:100%;height:100%;object-fit:cover;border-radius:28px"></div><h1 style="font-size:28px;font-weight:800">DDchat</h1><p style="color:#8696a0;margin-top:12px">Welcome to DDchat</p><p style="margin-top:40px;font-size:12px;color:#555">from Da Demon Hub</p></div></div>
 <div id="page-lang" class="page"><div class="top"><div class="back" onclick="showPage('splash')">‹</div><div class="title" style="flex:1;text-align:center">Choose Language</div><div style="width:28px"></div></div><div class="searchWrap"><input class="sInput" id="langSearch" placeholder="Search language..." oninput="filterLang()"></div><div id="langList" style="flex:1;overflow:auto;padding:10px"></div></div>
 <div id="page-auth" class="page"><div style="flex:1;padding:20px;overflow:auto"><h2 style="font-size:26px;margin:20px 0">Welcome to DDchat</h2><input id="authEmail" class="inputDark" placeholder="DD ID / Gmail / Username / Phone"><input id="authPass" type="password" class="inputDark" placeholder="Password"><button class="btn" onclick="login()">Login / Sign Up</button><p id="authMsg" style="text-align:center;color:#5f2ee0;font-size:12px"></p><p style="text-align:center;color:#5f2ee0;margin:10px;cursor:pointer" onclick="recover()">Forgot? Recover</p></div></div>
 <div id="page-main" class="page"><div class="top" id="mainTopNormal"><div style="display:flex;align-items:center;gap:10px"><div class="iconBtn" onclick="openThreeDots()">⋮</div><div class="title">DDchat</div></div><div style="display:flex;gap:8px"><div class="iconBtn" onclick="openCamera()">📷</div><div class="iconBtn" style="background:#5f2ee0;color:#fff;font-weight:800" onclick="newChat()">+</div></div></div><div class="top" id="mainTopSelect" style="display:none"><div style="display:flex;align-items:center;gap:10px"><div class="back" onclick="exitSelect()">Done</div><b id="selCount">0 selected</b></div></div><div class="searchWrap" id="mainSearchWrap"><input id="mainSearch" class="sInput" placeholder="Search DD ID..." oninput="renderChats()"></div><div class="tabs" id="mainTabs"><div class="chip active" onclick="setFilter('All',this)">All</div><div class="chip" onclick="setFilter('Unread',this)">Unread</div><div class="chip" onclick="setFilter('Favorites',this)">Favorites</div><div class="chip" onclick="setFilter('Groups',this)">Groups</div></div><div class="chatList" id="chatList"></div><div class="bottom" id="mainBottom"><div class="navItem" onclick="goBottom('status')"><div>⭕</div>Status</div><div class="navItem" onclick="goBottom('calls')"><div>📞</div>Calls</div><div class="navItem" onclick="goBottom('groups')"><div>👥</div>Groups</div><div class="navItem active" onclick="goBottom('chats')"><div>💬</div>Chats</div><div class="navItem" onclick="goBottom('you')"><div>👤</div>You</div></div><div class="actionBar" id="selectBar" style="display:none"><div onclick="archiveSelected()"><span>📦</span>Archive</div><div onclick="readSelected()"><span>✓✓</span>Read</div><div onclick="deleteSelected()" style="color:#f55"><span>🗑️</span>Delete</div></div></div>
@@ -75,32 +75,8 @@ function buildLang(){let langs=['English','Chinese 中文','Spanish','French','A
 function filterLang(){let q=document.getElementById('langSearch').value.toLowerCase();document.querySelectorAll('#langList .row').forEach(r=>{r.style.display=r.innerText.toLowerCase().includes(q)?'flex':'none';});}
 
 async function login(){
-  let input=document.getElementById('authEmail').value.trim();
-  let pass=document.getElementById('authPass').value.trim();
-  let msg=document.getElementById('authMsg');
-  if(!input||!pass){alert('Enter DD ID / Email / Username / Phone + Password');return;}
-  msg.innerText='Checking...';
-  try{
-    let queries=[
-      window.fns.query(window.fns.collection(window.db,'users'),window.fns.where('id','==',input.toUpperCase())),
-      window.fns.query(window.fns.collection(window.db,'users'),window.fns.where('email','==',input.toLowerCase())),
-      window.fns.query(window.fns.collection(window.db,'users'),window.fns.where('username','==',input.toLowerCase().replace('@',''))),
-      window.fns.query(window.fns.collection(window.db,'users'),window.fns.where('phone','==',input))
-    ];
-    let snaps=await Promise.all(queries.map(q=>window.fns.getDocs(q)));
-    let found=null; for(let s of snaps){ if(!s.empty){found=s.docs[0].data(); break;}}
-    if(found){
-      if(found.pass!==pass){msg.innerText='Wrong password'; alert('Wrong password for '+found.id); return;}
-      curUser=found; save(); showPage('page-main'); renderChats(); renderYou(); startInboxListener(); msg.innerText=''; return;
-    }
-    let newId=input.startsWith('DD-')?input.toUpperCase():'DD-'+Math.floor(10000+Math.random()*90000);
-    let uname=input.includes('@')?input.split('@')[0].toLowerCase():input.replace(/[^a-z0-9]/gi,'').toLowerCase();
-    let newUser={id:newId,email:input.includes('@')?input.toLowerCase():'',username:uname,phone:/^[0-9+]+$/.test(input)?input:'',name:uname||'User',pass:pass,about:'😁 Today in emoji...',photo:'',created:Date.now()};
-    await window.fns.setDoc(window.fns.doc(window.db,'users',newId),newUser);
-    curUser=newUser; save(); showPage('page-main'); renderChats(); renderYou(); startInboxListener(); alert('Account created ✅ Your DD ID: '+newId);
-  }catch(e){msg.innerText=e.message; alert(e.message);}
+  let newUser={id:newId,email:input.includes('@')?input.toLowerCase():'',username:uname,phone:/^[0-9+]+$/.test(input)?input:'',name:uname||'User',pass:pass,about:'😁 Today in emoji...',photo:'',lang:curUser.lang||'English',links:[],groups:[],calls:[],created:Date.now()};
 }
-
 function startInboxListener(){
   if(inboxUnsub) inboxUnsub();
   if(!curUser.id) return;
@@ -125,6 +101,7 @@ function startInboxListener(){
     }
   });
 }
+
 
 function logout(){if(confirm('Logout?')){localStorage.removeItem('dd_user');location.reload();}}
 function recover(){let m=prompt('Enter your DD ID or Email:'); if(!m) return; alert('If account exists, you can login with same DD ID / Email / Username / Phone + your old password. If forgot, create new account and old DD ID will be released after 30 days.');}
