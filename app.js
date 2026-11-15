@@ -121,13 +121,40 @@ const LANGUAGES = [
   { code:"cy", name:"Welsh" }
 ];
 
-// === LANGUAGE TRANSLATION FOR ALL WORLD LANGUAGES - START ===
+// === LANGUAGE ONLY - WHOLE APP - ICONS SAFE - FAST ===
 const BASE_EN = {
-  chooseLang:"Choose your language", searchLang:"Search language", continue:"Continue", signup:"Sign Up", login:"Log In", createAcc:"Create Account", already:"Already have an account?", newHere:"New here?", name:"Name", username:"Username", email:"Email", password:"Password", forgot:"Forgot password?", searchUser:"Search username...", noChats:"No chats yet. Search username above to start.", noUser:"No user found", editProfile:"Edit Profile", about:"About", save:"Save", postStatus:"Post Status", whatMind:"What's on your mind?", post:"Post", createGroup:"Create Group", groupName:"Group name", create:"Create", noCalls:"No calls yet. Voice/video calling integration coming (use WebRTC).", yourQr:"Your QR", newChat:"New Chat (search above)", newGroup:"New Group", fileSelected:"File selected", profileUpdated:"Profile updated!", reset:"Reset"
+  chooseLang:"Choose your language", searchLang:"Search language", continue:"Continue",
+  signup:"Sign Up", login:"Log In", createAcc:"Create Account", already:"Already have an account?", newHere:"New here?",
+  name:"Name", username:"Username", email:"Email", password:"Password", forgot:"Forgot password?",
+  searchUser:"Search username...", noChats:"No chats yet. Search username above to start.", noUser:"No user found",
+  editProfile:"Edit Profile", qrCode:"QR Code", account:"Account", privacy:"Privacy", chats:"Chats",
+  appearance:"Appearance", notifications:"Notifications", storage:"Storage and Data", helpFeedback:"Help & Feedback",
+  logout:"Log Out", you:"You", groups:"Groups", calls:"Calls", status:"Status",
+  postStatus:"Post Status", whatMind:"What's on your mind?", post:"Post", createGroup:"Create Group",
+  groupName:"Group name", create:"Create", noCalls:"No calls yet. Voice/video calling integration coming (use WebRTC).",
+  yourQr:"Your QR", newChat:"New Chat (search above)", newGroup:"New Group", new:"New",
+  fileSelected:"File selected", profileUpdated:"Profile updated!", reset:"Reset", save:"Save", about:"About",
+  startChatting:"Start chatting", members:"members"
 };
 let currentTranslations = {...BASE_EN};
 let translationCache = JSON.parse(localStorage.getItem("ddchat_translation_cache") || "{}");
 function tr(k){ return currentTranslations[k] || BASE_EN[k] || k; }
+function setLabelSafe(btn, translated){
+  if(btn.innerHTML.includes("<br>")){
+    const iconPart = btn.innerHTML.split("<br>")[0];
+    btn.innerHTML = iconPart + "<br>" + translated;
+  } else {
+    const icon = btn.querySelector("i, svg, img");
+    if(icon){
+      const textNode = Array.from(btn.childNodes).find(n=>n.nodeType===3);
+      if(textNode) textNode.textContent = " " + translated;
+      else btn.innerHTML = icon.outerHTML + " " + translated;
+    } else {
+      const firstText = Array.from(btn.childNodes).find(n=>n.nodeType===3);
+      if(firstText) firstText.textContent = translated;
+    }
+  }
+}
 function applyTranslationsNow(){
   if($("#langSearch")) $("#langSearch").placeholder = tr("searchLang");
   if($("#langContinue")) $("#langContinue").textContent = tr("continue");
@@ -141,26 +168,42 @@ function applyTranslationsNow(){
   if($("#authEmail")) $("#authEmail").placeholder = tr("email");
   if($("#authPassword")) $("#authPassword").placeholder = tr("password");
   if($("#chatSearch")) $("#chatSearch").placeholder = tr("searchUser");
+  // Whole app - settings
+  $$(".settings-list li").forEach(li=>{
+    const s = li.dataset.setting;
+    const map = { account:"account", privacy:"privacy", chats:"chats", appearance:"appearance", notifications:"notifications", storage:"storage", help:"helpFeedback", logout:"logout" };
+    if(map[s]){
+      const txtNode = Array.from(li.childNodes).find(n=>n.nodeType===3 && n.textContent.trim());
+      if(txtNode) txtNode.textContent = tr(map[s]) + " ";
+    }
+  });
+  // Bottom nav - keep icons
+  $$("#bottomnav button").forEach(btn=>{
+    const pg = btn.dataset.page;
+    if(pg==="chats") setLabelSafe(btn, tr("chats"));
+    if(pg==="groups") setLabelSafe(btn, tr("groups"));
+    if(pg==="status") setLabelSafe(btn, tr("status"));
+    if(pg==="calls") setLabelSafe(btn, tr("calls"));
+    if(pg==="settings") setLabelSafe(btn, tr("you"));
+  });
 }
 async function loadTranslationsFor(lang){
   if(lang==="en"){ currentTranslations={...BASE_EN}; applyTranslationsNow(); return; }
   if(translationCache[lang]){ currentTranslations=translationCache[lang]; applyTranslationsNow(); return; }
   applyTranslationsNow();
-  const newTrans={};
-  for(let k of Object.keys(BASE_EN)){
+  const entries = await Promise.all(Object.keys(BASE_EN).map(async k=>{
     try{
       const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(BASE_EN[k])}&langpair=en|${lang}`);
-      const j=await r.json();
-      newTrans[k]=j.responseData?.translatedText || BASE_EN[k];
-    }catch{ newTrans[k]=BASE_EN[k]; }
-  }
-  currentTranslations=newTrans;
-  translationCache[lang]=newTrans;
+      const j=await r.json(); return [k, j.responseData?.translatedText || BASE_EN[k]];
+    }catch{ return [k, BASE_EN[k]]; }
+  }));
+  currentTranslations = Object.fromEntries(entries);
+  translationCache[lang]=currentTranslations;
   localStorage.setItem("ddchat_translation_cache", JSON.stringify(translationCache));
   applyTranslationsNow();
 }
 loadTranslationsFor(selectedLang);
-// === LANGUAGE TRANSLATION - END ===
+// === END LANGUAGE ===
 
 function renderLanguages(filter="") {
   const ul = $("#langList"); ul.innerHTML = "";
@@ -222,11 +265,7 @@ onAuthStateChanged(auth, async (user) => {
       $("#profileName").textContent = d.name; 
       $("#profileUsername").textContent = "@"+d.username; 
       $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase();
-      if(d.lang && d.lang!==selectedLang){
-        selectedLang=d.lang;
-        localStorage.setItem("ddchat_lang", d.lang);
-        await loadTranslationsFor(d.lang);
-      }
+      if(d.lang && d.lang!==selectedLang){ selectedLang=d.lang; localStorage.setItem("ddchat_lang", d.lang); await loadTranslationsFor(d.lang); }
     }
     showScreen("app"); loadChats(); loadGroups(); loadStatus(); loadCalls();
   } else {
@@ -240,7 +279,14 @@ $$("#bottomnav button").forEach(btn => {
   btn.onclick = () => {
     $$("#bottomnav button").forEach(b => b.classList.remove("active")); btn.classList.add("active");
     $$(".page").forEach(p => p.classList.remove("active")); $("#page-" + btn.dataset.page).classList.add("active");
-    $("#topTitle").textContent = btn.dataset.page === "chats" ? "DDchat" : btn.dataset.page.charAt(0).toUpperCase()+btn.dataset.page.slice(1);
+    if($("#topTitle")){
+      const pg = btn.dataset.page;
+      if(pg==="chats") $("#topTitle").textContent = "DDchat";
+      else if(pg==="groups") $("#topTitle").textContent = tr("groups");
+      else if(pg==="status") $("#topTitle").textContent = tr("status");
+      else if(pg==="calls") $("#topTitle").textContent = tr("calls");
+      else $("#topTitle").textContent = tr("you");
+    }
   };
 });
 
@@ -254,7 +300,7 @@ function loadChats(){
       const data=d.data();
       const unread = data.unreadCount?.[currentUser.uid] || 0;
       const li=document.createElement("li");
-      li.innerHTML=`<div class="avatar">${(data.lastMsg||"D")[0].toUpperCase()}</div><div style="flex:1"><b>Chat</b><br><small>${data.lastMsg||"Start chatting"}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`;
+      li.innerHTML=`<div class="avatar">${(data.lastMsg||"D")[0].toUpperCase()}</div><div style="flex:1"><b>Chat</b><br><small>${data.lastMsg||tr("startChatting")}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`;
       li.onclick=()=>openChat(d.id,data.members.find(m=>m!==currentUser.uid)); list.appendChild(li);
     });
   });
@@ -349,14 +395,14 @@ $("#createGroupBtn").onclick=()=>{
 };
 function loadGroups(){
   const q=query(collection(db,"groups"), where("members","array-contains",currentUser.uid));
-  onSnapshot(q,(snap)=>{ const list=$("#groupList"); list.innerHTML=""; snap.forEach(d=>{ const g=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">G</div><div><b>${g.name}</b><br><small>${g.members.length} members</small></div>`; list.appendChild(li); }); });
+  onSnapshot(q,(snap)=>{ const list=$("#groupList"); list.innerHTML=""; snap.forEach(d=>{ const g=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">G</div><div><b>${g.name}</b><br><small>${g.members.length} ${tr("members")}</small></div>`; list.appendChild(li); }); });
 }
 
 function loadCalls(){ $("#callList").innerHTML=`<li style='padding:15px;color:#8696a0'>${tr("noCalls")}</li>`; }
 
 $("#qrBtn").onclick=()=>{ const url=`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${currentUser.uid}`; showModal(tr("yourQr"),`<img src="${url}" style="width:100%;border-radius:8px"/>`); };
 $("#cameraBtn").onclick=()=>{ $("#fileInput").click(); };
-$("#plusBtn").onclick=()=>{ showModal("New",`<button class="btn" onclick="document.getElementById('chatSearch').focus();document.getElementById('modal').classList.add('hidden')">💬 ${tr("newChat")}</button><br><br><button class="btn" id="newGroupModal">👥 ${tr("newGroup")}</button>`); setTimeout(()=>{ $("#newGroupModal").onclick=()=>{ $("#modal").classList.add("hidden"); $("#createGroupBtn").click(); }; },100); };
+$("#plusBtn").onclick=()=>{ showModal(tr("new"),`<button class="btn" onclick="document.getElementById('chatSearch').focus();document.getElementById('modal').classList.add('hidden')">💬 ${tr("newChat")}</button><br><br><button class="btn" id="newGroupModal">👥 ${tr("newGroup")}</button>`); setTimeout(()=>{ $("#newGroupModal").onclick=()=>{ $("#modal").classList.add("hidden"); $("#createGroupBtn").click(); }; },100); };
 $("#fileInput").onchange=(e)=>{ const file=e.target.files[0]; if(file) alert(`${tr("fileSelected")}: ${file.name}`); };
 
 $$(".settings-list li").forEach(li=>{
