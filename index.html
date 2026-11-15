@@ -459,10 +459,19 @@ function editField(f){
 function deleteLink(i){ if(confirm('Remove this link?')){ userLinks.splice(i,1); save(); renderProfileFields(); } }
 function showArchived(){let arch=chats.filter(c=>c.arch);if(arch.length==0) alert('No archived'); else if(confirm('Archived: '+arch.map(c=>c.name).join(', ')+' - Unarchive all?')){arch.forEach(c=>c.arch=false);save();renderChats();}}
 function attachFile(){document.getElementById('galleryInput').click();}
-function saveQR(){let img=document.getElementById('qrImg'); if(img) window.open(img.src,'_blank');}
-function resetQR(){curUser.id='DD-'+Math.floor(Math.random()*90000+10000);document.getElementById('qrId').innerText=curUser.id;save();updateQR();}
-function shareQR(){updateQR(); alert('Share QR: '+curUser.id);}
-document.addEventListener('DOMContentLoaded',init);
+async function login(){
+  let e=document.getElementById('authEmail').value.trim();
+  let p=document.getElementById('authPass').value.trim();
+  if(!e||!p){alert('Enter email & pass');return;}
+  let s=JSON.parse(localStorage.getItem('dd_user')||'null');
+  if(s&&s.email==e) curUser.id=s.id;
+  else if(!curUser.id||curUser.id.startsWith('DD-1')) curUser.id='DD-'+Math.floor(Math.random()*90000+10000);
+  curUser.email=e;curUser.pass=p;curUser.name=e.split('@')[0];
+  save();
+  if(window.db) window.fns.setDoc(window.fns.doc(window.db,'users',curUser.id),{id:curUser.id,email:e,name:curUser.name},{merge:true});
+  showPage('page-main');renderChats();
+}
+ document.addEventListener('DOMContentLoaded',init);
 </script>
 </body>
 </html>
