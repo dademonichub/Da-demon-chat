@@ -121,7 +121,7 @@ const LANGUAGES = [
   { code:"cy", name:"Welsh" }
 ];
 
-// === LANGUAGE ONLY - ANY LANGUAGE - FUTURE PROOF ===
+// === LANGUAGE ONLY - FIXED @username ===
 const BAD_FIX = { "Client en Compte":"Compte", "Compte du client":"Compte" };
 let transCache = JSON.parse(localStorage.getItem("ddchat_trans_v3") || "{}");
 function getNodes(root){
@@ -152,8 +152,13 @@ async function translateApp(lang){
   if(need.size){
     const res=await Promise.all([...need.keys()].map(async o=>{
       try{
-        const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(o.trim())}&langpair=en|${lang}`);
-        const j=await r.json(); let t=j.responseData?.translatedText||o;
+        // SPECIAL FIX FOR @username - translate without @ then add @ back
+        let q = o.trim();
+        let isAtUser = q.toLowerCase() === "@username";
+        if(isAtUser) q = "username";
+        const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=en|${lang}`);
+        const j=await r.json(); let t=j.responseData?.translatedText||q;
+        if(isAtUser) t = "@" + t;
         if(BAD_FIX[t])t=BAD_FIX[t]; return [o,t];
       }catch{ return [o,o]; }
     }));
