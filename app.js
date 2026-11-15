@@ -125,8 +125,6 @@ const LANGUAGES = [
 const BAD_FIX = { "Client en Compte":"Compte", "Compte du client":"Compte" };
 const FORCE_FIX = { "QR Code": { "th":"คิวอาร์โค้ด", "zh":"二维码", "fr":"Code QR", "es":"Código QR", "de":"QR-Code" } };
 let transCache = JSON.parse(localStorage.getItem("ddchat_trans_v3") || "{}");
-
-// GOOGLE TRANSLATE - ONLY CHANGE
 async function googleTranslate(text, from, to){
   if(!text || from===to) return text;
   try{
@@ -137,7 +135,6 @@ async function googleTranslate(text, from, to){
     return out||text;
   }catch{ return text; }
 }
-
 function getNodes(root){
   const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>{
     const p=n.parentElement; if(!p) return NodeFilter.FILTER_REJECT;
@@ -164,27 +161,22 @@ async function translateApp(lang){
     else if(orig.trim()){ if(!need.has(orig))need.set(orig,[]); }
   });
   if(need.size){
-    for(const [orig, tns] of [...need.entries()]){
+    const res=await Promise.all([...need.keys()].map(async o=>{
       try{
-        let q = orig.trim();
-        if(q==="QR Code" && FORCE_FIX["QR Code"][lang]){
-          const t=FORCE_FIX["QR Code"][lang];
-          transCache[lang+"::"+orig.trim()]=t;
-          tns.forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; });
-          $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===orig) el.placeholder=t; });
-          continue;
-        }
+        let q = o.trim();
+        if(q==="QR Code" && FORCE_FIX["QR Code"][lang]) return [o, FORCE_FIX["QR Code"][lang]];
         let isAtUser = q.toLowerCase() === "@username";
         if(isAtUser) q = "username";
         let t = await googleTranslate(q, "en", lang);
         if(isAtUser) t = "@" + t;
-        if(BAD_FIX[t])t=BAD_FIX[t];
-        transCache[lang+"::"+orig.trim()]=t;
-        transCache[lang+"::"+orig]=t;
-        tns.forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; });
-        $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===orig) el.placeholder=t; });
-      }catch{ }
-    }
+        if(BAD_FIX[t])t=BAD_FIX[t]; return [o,t];
+      }catch{ return [o,o]; }
+    }));
+    res.forEach(([o,t])=>{
+      transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t;
+      (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; });
+      $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===o) el.placeholder=t; });
+    });
     localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache));
   }
 }
@@ -306,8 +298,6 @@ function openChat(chatId,otherUid){
       if(d.from!==currentUser.uid && myLang!=="en" && d.text.trim()){
         const cacheKey = myLang+"::msg::"+d.text.trim();
         const cached = transCache[cacheKey];
-        // DUPLICATE FIX - check if already has small
-        if(div.querySelector("small")) return;
         if(cached){
           if(!div.querySelector("small")){
             div.innerHTML = escapeHtml(d.text) + `<br><small style="opacity:0.7;display:block;margin-top:3px">→ ${escapeHtml(cached)}</small>`;
@@ -320,9 +310,6 @@ function openChat(chatId,otherUid){
           else if (/[\u0600-\u06FF]/.test(d.text)) src = "ar";
           else if (/[\u0E00-\u0E7F]/.test(d.text)) src = "th";
           else if (/[а-яА-Я]/.test(d.text)) src = "ru";
-          else if (/[가-힣]/.test(d.text)) src = "ko";
-          else if (/[ぁ-んァ-ン]/.test(d.text)) src = "ja";
-          if(src===myLang) return;
           googleTranslate(d.text, src, myLang).then(t=>{
             if(t && t.toLowerCase()!==d.text.toLowerCase()){
               transCache[cacheKey]=t;
