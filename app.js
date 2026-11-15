@@ -87,24 +87,14 @@ $("#authBtn").onclick = async () => {
 
 $("#forgotLink").onclick = (e)=>{ e.preventDefault(); showModal("Reset","Contact support: flatking43@gmail.com"); };
 
-// AUTH STATE - FIXED FOR REFRESH
+// AUTH STATE
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
     const snap = await getDoc(doc(db, "users", user.uid));
     if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase(); }
     showScreen("app"); loadChats(); loadGroups(); loadStatus(); loadCalls();
-    const savedId = localStorage.getItem("dd_currentChatId");
-    const savedWith = localStorage.getItem("dd_currentChatWith");
-    if(savedId && savedWith){
-      setTimeout(()=> openChat(savedId, savedWith), 800);
-    }
-  } else { 
-    currentUser=null; 
-    localStorage.removeItem("dd_currentChatId");
-    localStorage.removeItem("dd_currentChatWith");
-    showScreen("auth-screen"); 
-  }
+  } else { currentUser=null; showScreen("auth-screen"); }
 });
 
 // BOTTOM NAV
@@ -140,17 +130,12 @@ $("#chatSearch").oninput = async (e)=>{
 
 async function startChat(otherUid){
   const members=[currentUser.uid,otherUid].sort(); const chatId=members.join("_");
-  localStorage.setItem("dd_currentChatId", chatId);
-  localStorage.setItem("dd_currentChatWith", otherUid);
   const ref=doc(db,"chats",chatId); const snap=await getDoc(ref);
   if(!snap.exists()) await setDoc(ref,{members,lastMsg:"",updated:serverTimestamp()}); openChat(chatId,otherUid);
 }
 
 function openChat(chatId,otherUid){
-  currentChatId=chatId; currentChatWith=otherUid; 
-  localStorage.setItem("dd_currentChatId", chatId);
-  localStorage.setItem("dd_currentChatWith", otherUid);
-  showScreen("chat-view");
+  currentChatId=chatId; currentChatWith=otherUid; showScreen("chat-view");
   $("#chatTitle").textContent="Chat";
   const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts"));
   onSnapshot(q,(snap)=>{
@@ -167,11 +152,7 @@ async function sendMessage(){
   await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text,ts:serverTimestamp()});
   await updateDoc(doc(db,"chats",currentChatId),{lastMsg:text,updated:serverTimestamp()});
 }
-$("#chatBack").onclick=()=>{
-  localStorage.removeItem("dd_currentChatId");
-  localStorage.removeItem("dd_currentChatWith");
-  showScreen("app");
-};
+$("#chatBack").onclick=()=>showScreen("app");
 
 // TRANSLATE
 document.addEventListener("click", async (e)=>{
