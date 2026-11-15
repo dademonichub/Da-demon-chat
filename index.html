@@ -80,19 +80,13 @@ function saveAbout(){
  document.getElementById('pAbout').innerText=e+' '+t;
  closeAbout();
 }
-function editField(type){
- let cur=document.getElementById('p'+type.charAt(0).toUpperCase()+type.slice(1)).innerText;
- let val=prompt('Edit '+type+':', cur);
- if(val!==null && val.trim()!==''){
-   document.getElementById('p'+type.charAt(0).toUpperCase()+type.slice(1)).innerText=val.trim();
- }
-}
+<div class="row" onclick="editField('ddid')"><b>DD ID</b><span id="pDdid" style="color:#5f2ee0"></span><span>›</span></div>
+<div class="row" onclick="editField('gmail')"><b>Gmail</b><span id="pGmail" style="color:#5f2ee0"></span><span>›</span></div>
 </script>
 <style>
 #aboutSugs .row.active{background:#eee}
 </style>
 <div id="page-qr" class="page"><div class="top"><div class="back" onclick="showPage('page-you')">✕</div><div class="title" style="flex:1;text-align:center">QR Code</div><div class="iconBtn" onclick="shareQR()">↗️</div></div><div style="flex:1;padding:20px;text-align:center"><h3 id="qrName">Da Demon Hub</h3><div id="qrBox" style="width:260px;height:260px;background:#fff;margin:20px auto;border-radius:12px;display:grid;place-items:center;color:#000;padding:10px"><img id="qrImg" src="" style="width:200px;height:200px"><div><span id="qrId">DD-48392</span><br><small style="color:#555">Scan to add me on DDchat</small></div></div><button class="btn" onclick="shareQR()">Share QR</button><button class="btn" style="background:#2a3942" onclick="saveQR()">Save QR</button><button class="btn" style="background:#2a3942" onclick="openQRScanner()">Scan QR</button><button class="btn" style="background:#2a3942" onclick="resetQR()">Reset QR</button><button class="btn" style="background:#2a3942" onclick="logout()">Logout (Switch account)</button></div></div>
-
 <!-- QR SCANNER PAGE -->
 <div id="page-qrScan" class="page" style="background:#000;z-index:80"><div class="top"><div class="back" onclick="showPage('page-qr')">✕</div><div class="title" style="flex:1;text-align:center">Scan DDchat QR</div></div><video id="qrVideo" autoplay playsinline style="width:100%;flex:1;object-fit:cover"></video><div style="padding:12px;text-align:center;color:#fff;background:#111b21">Point camera at DDchat QR<br><small id="qrScanStatus" style="color:#8696a0">Scanning...</small></div></div>
 <div id="page-generic" class="page"><div class="top"><div class="back" onclick="showPage('page-you')">‹</div><div class="title" style="flex:1;text-align:center" id="gTitle">Title</div><div style="width:28px"></div></div><div id="gBody" style="flex:1;overflow:auto;padding:12px"></div></div>
