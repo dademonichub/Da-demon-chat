@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#075E54" />
+  <title>DDchat</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body>
+
+<!-- ================= SPLASH ================= -->
+<div id="splash" class="screen active">
+  <div class="splash-box">
+    <div class="logo">DD</div>
+    <h1>Welcome to DDchat</h1>
+    <p>Connect. Chat. Translate. Anywhere.</p>
+  </div>
+</div>
+
+<!-- ================= LANGUAGE SELECT ================= -->
+<div id="language-screen" class="screen">
+  <h2>Choose Your Language</h2>
+  <input type="text" id="langSearch" placeholder="Search language..." />
+  <ul id="langList"></ul>
+  <button id="langContinue" class="btn">Continue</button>
+</div>
+
+<!-- ================= AUTH ================= -->
+<div id="auth-screen" class="screen">
+  <div class="auth-box">
+    <h2 id="authTitle">Sign Up</h2>
+    <input type="text" id="authName" placeholder="Full name" />
+    <input type="text" id="authUsername" placeholder="Username (unique)" />
+    <input type="email" id="authEmail" placeholder="Email" />
+    <input type="password" id="authPassword" placeholder="Password" />
+    <button id="authBtn" class="btn">Create Account</button>
+    <p class="switch">
+      <span id="switchText">Already have an account?</span>
+      <a href="#" id="switchAuth">Log In</a>
+    </p>
+    <a href="#" id="forgotLink" style="display:none;">Forgot password?</a>
+  </div>
+</div>
+
+<!-- ================= MAIN APP ================= -->
+<div id="app" class="screen">
+  <!-- Top Bar -->
+  <header id="topbar">
+    <div id="topLeft" class="icon-btn"><i class="fas fa-ellipsis-v"></i></div>
+    <div id="topTitle">DDchat</div>
+    <div class="top-right">
+      <div id="cameraBtn" class="icon-btn"><i class="fas fa-camera"></i></div>
+      <div id="plusBtn" class="icon-btn"><i class="fas fa-plus"></i></div>
+    </div>
+  </header>
+
+  <!-- Pages -->
+  <main id="pages">
+    <section id="page-chats" class="page active">
+      <input type="text" id="chatSearch" class="searchbar" placeholder="Search chats, contacts, DD ID..." />
+      <ul id="chatList" class="list"></ul>
+    </section>
+
+    <section id="page-groups" class="page">
+      <button id="createGroupBtn" class="btn small">+ Create Group</button>
+      <ul id="groupList" class="list"></ul>
+    </section>
+
+    <section id="page-calls" class="page">
+      <ul id="callList" class="list"></ul>
+    </section>
+
+    <section id="page-status" class="page">
+      <button id="postStatusBtn" class="btn small">+ Post Status</button>
+      <ul id="statusList" class="list"></ul>
+    </section>
+
+    <section id="page-profile" class="page">
+      <div class="profile-header">
+        <div class="avatar" id="profileAvatar">?</div>
+        <h3 id="profileName">User</h3>
+        <p id="profileUsername">@username</p>
+        <div class="profile-actions">
+          <button class="btn small" id="editProfileBtn">Edit Profile</button>
+          <button class="btn small" id="qrBtn">QR Code</button>
+        </div>
+      </div>
+      <ul class="list settings-list">
+        <li data-setting="account">Account <i class="fas fa-chevron-right"></i></li>
+        <li data-setting="privacy">Privacy <i class="fas fa-chevron-right"></i></li>
+        <li data-setting="chats">Chats <i class="fas fa-chevron-right"></i></li>
+        <li data-setting="appearance">Appearance <i class="fas fa-chevron-right"></i></li>
+        <li data-setting="notifications">Notifications <i class="fas fa-chevron-right"></i></li>
+        <li data-setting="storage">Storage and Data <i class="fas fa-chevron-right"></i></li>
+        <li data-setting="help">Help & Feedback <i class="fas fa-chevron-right"></i></li>
+        <li data-setting="invite">Invite Contacts <i class="fas fa-chevron-right"></i></li>
+        <li data-setting="logout" class="danger">Log Out</li>
+      </ul>
+    </section>
+  </main>
+
+  <!-- Bottom Nav -->
+  <nav id="bottomnav">
+    <button data-page="profile"><i class="fas fa-user"></i><span>You</span></button>
+    <button data-page="chats" class="active"><i class="fas fa-comment"></i><span>Chats</span></button>
+    <button data-page="groups"><i class="fas fa-users"></i><span>Groups</span></button>
+    <button data-page="calls"><i class="fas fa-phone"></i><span>Calls</span></button>
+    <button data-page="status"><i class="fas fa-circle-notch"></i><span>Status</span></button>
+  </nav>
+</div>
+
+<!-- ================= CHAT VIEW ================= -->
+<div id="chat-view" class="screen">
+  <header id="chatHeader">
+    <div class="icon-btn" id="chatBack"><i class="fas fa-arrow-left"></i></div>
+    <div id="chatTitle">Chat</div>
+    <div class="icon-btn" id="chatMenu"><i class="fas fa-ellipsis-v"></i></div>
+  </header>
+  <div id="chatMessages"></div>
+  <div id="chatInputBar">
+    <input type="file" id="fileInput" hidden />
+    <button id="plusChat" class="icon-btn"><i class="fas fa-plus"></i></button>
+    <input type="text" id="messageInput" placeholder="Type a message..." />
+    <button id="micBtn" class="icon-btn"><i class="fas fa-microphone"></i></button>
+    <button id="sendBtn" class="icon-btn send"><i class="fas fa-paper-plane"></i></button>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="modal" class="modal hidden">
+  <div class="modal-content">
+    <h3 id="modalTitle">Modal</h3>
+    <div id="modalBody"></div>
+    <button class="btn" id="modalClose">Close</button>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
