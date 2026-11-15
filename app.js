@@ -125,6 +125,19 @@ const LANGUAGES = [
 const BAD_FIX = { "Client en Compte":"Compte", "Compte du client":"Compte" };
 const FORCE_FIX = { "QR Code": { "th":"คิวอาร์โค้ด", "zh":"二维码", "fr":"Code QR", "es":"Código QR", "de":"QR-Code" } };
 let transCache = JSON.parse(localStorage.getItem("ddchat_trans_v3") || "{}");
+
+// GOOGLE TRANSLATE - ONLY CHANGE
+async function googleTranslate(text, from, to){
+  if(!text || from===to) return text;
+  try{
+    const url=`https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`;
+    const r=await fetch(url);
+    const j=await r.json();
+    let out=""; j[0].forEach(x=>{ if(x[0]) out+=x[0]; });
+    return out||text;
+  }catch{ return text; }
+}
+
 function getNodes(root){
   const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>{
     const p=n.parentElement; if(!p) return NodeFilter.FILTER_REJECT;
@@ -151,23 +164,27 @@ async function translateApp(lang){
     else if(orig.trim()){ if(!need.has(orig))need.set(orig,[]); }
   });
   if(need.size){
-    const res=await Promise.all([...need.keys()].map(async o=>{
+    for(const [orig, tns] of [...need.entries()]){
       try{
-        let q = o.trim();
-        if(q==="QR Code" && FORCE_FIX["QR Code"][lang]) return [o, FORCE_FIX["QR Code"][lang]];
+        let q = orig.trim();
+        if(q==="QR Code" && FORCE_FIX["QR Code"][lang]){
+          const t=FORCE_FIX["QR Code"][lang];
+          transCache[lang+"::"+orig.trim()]=t;
+          tns.forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; });
+          $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===orig) el.placeholder=t; });
+          continue;
+        }
         let isAtUser = q.toLowerCase() === "@username";
         if(isAtUser) q = "username";
-        const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=en|${lang}`);
-        const j=await r.json(); let t=j.responseData?.translatedText||q;
+        let t = await googleTranslate(q, "en", lang);
         if(isAtUser) t = "@" + t;
-        if(BAD_FIX[t])t=BAD_FIX[t]; return [o,t];
-      }catch{ return [o,o]; }
-    }));
-    res.forEach(([o,t])=>{
-      transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t;
-      (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; });
-      $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===o) el.placeholder=t; });
-    });
+        if(BAD_FIX[t])t=BAD_FIX[t];
+        transCache[lang+"::"+orig.trim()]=t;
+        transCache[lang+"::"+orig]=t;
+        tns.forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; });
+        $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===orig) el.placeholder=t; });
+      }catch{ }
+    }
     localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache));
   }
 }
@@ -283,29 +300,39 @@ function openChat(chatId,otherUid){
       const div=document.createElement("div");
       div.className="msg "+(d.from===currentUser.uid?"me":"them");
       div.id="msg_"+m.id;
+      div.dataset.orig=d.text;
       div.innerHTML=escapeHtml(d.text);
       box.appendChild(div);
       if(d.from!==currentUser.uid && myLang!=="en" && d.text.trim()){
         const cacheKey = myLang+"::msg::"+d.text.trim();
         const cached = transCache[cacheKey];
-        if(cached && !cached.includes("AUTO is invalid")){
-          div.innerHTML += `<br><small style="opacity:0.7;display:block;margin-top:3px">→ ${escapeHtml(cached)}</small>`;
+        // DUPLICATE FIX - check if already has small
+        if(div.querySelector("small")) return;
+        if(cached){
+          if(!div.querySelector("small")){
+            div.innerHTML = escapeHtml(d.text) + `<br><small style="opacity:0.7;display:block;margin-top:3px">→ ${escapeHtml(cached)}</small>`;
+          }
         } else {
+          if(div.dataset.fetching) return;
+          div.dataset.fetching="1";
           let src = "en";
           if (/[\u4e00-\u9fff]/.test(d.text)) src = "zh";
           else if (/[\u0600-\u06FF]/.test(d.text)) src = "ar";
           else if (/[\u0E00-\u0E7F]/.test(d.text)) src = "th";
           else if (/[а-яА-Я]/.test(d.text)) src = "ru";
-          fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(d.text)}&langpair=${src}|${myLang}`)
-            .then(r=>r.json()).then(j=>{
-              let t=j.responseData?.translatedText||"";
-              if(t && !t.includes("AUTO is invalid") && t.toLowerCase()!==d.text.toLowerCase()){
-                transCache[cacheKey]=t;
-                localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache));
-                const el=document.getElementById("msg_"+m.id);
-                if(el) el.innerHTML += `<br><small style="opacity:0.7;display:block;margin-top:3px">→ ${escapeHtml(t)}</small>`;
+          else if (/[가-힣]/.test(d.text)) src = "ko";
+          else if (/[ぁ-んァ-ン]/.test(d.text)) src = "ja";
+          if(src===myLang) return;
+          googleTranslate(d.text, src, myLang).then(t=>{
+            if(t && t.toLowerCase()!==d.text.toLowerCase()){
+              transCache[cacheKey]=t;
+              localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache));
+              const el=document.getElementById("msg_"+m.id);
+              if(el && !el.querySelector("small")){
+                el.innerHTML = escapeHtml(el.dataset.orig) + `<br><small style="opacity:0.7;display:block;margin-top:3px">→ ${escapeHtml(t)}</small>`;
               }
-            }).catch(()=>{});
+            }
+          });
         }
       }
     });
