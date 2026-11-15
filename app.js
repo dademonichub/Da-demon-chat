@@ -121,7 +121,7 @@ const LANGUAGES = [
   { code:"cy", name:"Welsh" }
 ];
 
-// === LANGUAGE ONLY - FIXED @username + QR ===
+// === GOOGLE TRANSLATE ONLY - APP + CHAT ===
 const BAD_FIX = { "Client en Compte":"Compte", "Compte du client":"Compte" };
 const FORCE_FIX = { "QR Code": { "th":"คิวอาร์โค้ด", "zh":"二维码", "fr":"Code QR", "es":"Código QR", "de":"QR-Code" } };
 let transCache = JSON.parse(localStorage.getItem("ddchat_trans_v3") || "{}");
@@ -160,30 +160,31 @@ async function translateApp(lang){
     else if(orig.trim()){ if(!need.has(orig))need.set(orig,[]); }
   });
   if(need.size){
-    const res=await Promise.all([...need.keys()].map(async o=>{
-      try{
-        let q = o.trim();
-        if(q==="QR Code" && FORCE_FIX["QR Code"][lang]) return [o, FORCE_FIX["QR Code"][lang]];
-        let isAtUser = q.toLowerCase() === "@username";
-        if(isAtUser) q = "username";
-        const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=en|${lang}`);
-        const j=await r.json(); let t=j.responseData?.translatedText||q;
-        if(isAtUser) t = "@" + t;
-        if(BAD_FIX[t])t=BAD_FIX[t]; return [o,t];
-      }catch{ return [o,o]; }
-    }));
-    res.forEach(([o,t])=>{
+    for(const o of [...need.keys()]){
+      let q=o.trim();
+      if(q==="QR Code" && FORCE_FIX["QR Code"][lang]){
+        const t=FORCE_FIX["QR Code"][lang];
+        transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t;
+        (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; });
+        $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===o) el.placeholder=t; });
+        continue;
+      }
+      let isAtUser=q.toLowerCase()==="@username";
+      if(isAtUser) q="username";
+      let t=await googleTranslate(q,"en",lang);
+      if(isAtUser) t="@"+t;
+      if(BAD_FIX[t])t=BAD_FIX[t];
       transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t;
       (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; });
       $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===o) el.placeholder=t; });
-    });
+    }
     localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache));
   }
 }
 new MutationObserver(()=>{ const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en")translateApp(l); }).observe(document.body,{childList:true,subtree:true});
 const savedLang = localStorage.getItem("ddchat_lang");
 if(savedLang && savedLang!=="en") setTimeout(()=>translateApp(savedLang), 600);
-// === END LANGUAGE ONLY ===
+// === END GOOGLE ONLY ===
 
 function renderLanguages(filter="") {
   const ul = $("#langList"); ul.innerHTML = "";
