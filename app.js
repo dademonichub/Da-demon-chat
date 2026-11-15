@@ -121,7 +121,6 @@ const LANGUAGES = [
   { code:"cy", name:"Welsh" }
 ];
 
-// === GOOGLE TRANSLATE ONLY - APP + CHAT ===
 const BAD_FIX = { "Client en Compte":"Compte", "Compte du client":"Compte" };
 const FORCE_FIX = { "QR Code": { "th":"คิวอาร์โค้ด", "zh":"二维码", "fr":"Code QR", "es":"Código QR", "de":"QR-Code" } };
 let transCache = JSON.parse(localStorage.getItem("ddchat_trans_v3") || "{}");
@@ -184,7 +183,6 @@ async function translateApp(lang){
 new MutationObserver(()=>{ const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en")translateApp(l); }).observe(document.body,{childList:true,subtree:true});
 const savedLang = localStorage.getItem("ddchat_lang");
 if(savedLang && savedLang!=="en") setTimeout(()=>translateApp(savedLang), 600);
-// === END GOOGLE ONLY ===
 
 function renderLanguages(filter="") {
   const ul = $("#langList"); ul.innerHTML = "";
@@ -297,14 +295,6 @@ function openChat(chatId,otherUid){
       div.innerHTML=escapeHtml(d.text);
       box.appendChild(div);
       if(!d.text.trim() || myLang==="en") return;
-      let src="en";
-      if(/[\u4e00-\u9fff]/.test(d.text)) src="zh";
-      else if(/[\u0600-\u06FF]/.test(d.text)) src="ar";
-      else if(/[\u0E00-\u0E7F]/.test(d.text)) src="th";
-      else if(/[а-яА-Я]/.test(d.text)) src="ru";
-      else if(/[가-힣]/.test(d.text)) src="ko";
-      else if(/[ぁ-んァ-ン]/.test(d.text)) src="ja";
-      if(src===myLang) return;
       const cacheKey=myLang+"::msg::"+d.text.trim();
       if(div.querySelector("small")) return;
       const cached=transCache[cacheKey];
@@ -313,7 +303,7 @@ function openChat(chatId,otherUid){
       }else{
         if(div.dataset.fetching) return;
         div.dataset.fetching="1";
-        googleTranslate(d.text,src,myLang).then(t=>{
+        googleTranslate(d.text,"auto",myLang).then(t=>{
           if(!t || t.toLowerCase()===d.text.toLowerCase()) return;
           transCache[cacheKey]=t;
           localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache));
