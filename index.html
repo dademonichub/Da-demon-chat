@@ -1,87 +1,166 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>DDchat</title><link rel="icon" href="icon-192.png"><link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#5f2ee0">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system}
+body{background:#000;color:#fff;height:100vh;overflow:hidden}
+.page{position:fixed;inset:0;background:#000;display:none;flex-direction:column;z-index:1}
+.page.active{display:flex}
+.splash{background:radial-gradient(circle at center,#1a1033,#000);justify-content:center;align-items:center;text-align:center}
+.logo{width:120px;height:120px;background:linear-gradient(135deg,#5f2ee0,#7c3aed);border-radius:28px;display:grid;place-items:center;font-size:64px;margin:0 auto 20px}
+.top{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#111b21;border-bottom:1px solid #222d34}
+.back{font-size:28px;cursor:pointer;padding:0 6px}
+.title{font-size:20px;font-weight:800}
+.searchWrap{padding:8px 12px;background:#111b21}
+.sInput{width:100%;padding:10px 14px;border-radius:20px;border:none;background:#2a3942;color:#fff;outline:none}
+.card{background:#1c1e21;margin:10px 12px;border-radius:12px;overflow:hidden}
+.row{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid #000;cursor:pointer}
+.btn{width:calc(100% - 24px);margin:12px;padding:14px;background:linear-gradient(135deg,#5f2ee0,#7c3aed);border:none;border-radius:12px;color:#fff;font-weight:800;cursor:pointer}
+.avatar{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#5f2ee0,#7c3aed);display:grid;place-items:center;font-weight:800;overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.bottom{position:fixed;bottom:0;left:0;right:0;background:#111b21;border-top:1px solid #222d34;display:flex;padding:6px 0 10px;z-index:10}
+.navItem{flex:1;text-align:center;color:#8696a0;font-size:10px;cursor:pointer}.navItem.active{color:#fff}.navItem div{font-size:22px}
+.inputDark{width:100%;padding:14px;background:#2a3942;border:none;border-radius:10px;color:#fff;margin:8px 0;outline:none}
+.chatList{flex:1;overflow:auto;padding-bottom:75px}
+.chatRow{display:flex;gap:12px;padding:12px 14px;border-bottom:1px solid #111b21;cursor:pointer}
+</style></head><body>
+
+<div id="splash" class="page active splash"><div><div class="logo">💬</div><h1>DDchat</h1><p style="color:#8696a0;margin-top:12px">Welcome to DDchat</p><p style="margin-top:40px;font-size:12px;color:#555">from Da Demon Hub</p></div></div>
+
+<div id="page-auth" class="page"><div style="flex:1;padding:20px;overflow:auto"><h2 style="font-size:26px;margin:20px 0">Welcome to DDchat</h2>
+<input id="authEmail" class="inputDark" placeholder="DD ID / Gmail / Username / Phone">
+<input id="authPass" type="password" class="inputDark" placeholder="Password">
+<button class="btn" onclick="login()">Login / Sign Up</button>
+<p id="authMsg" style="text-align:center;color:#8696a0;font-size:12px;margin-top:10px"></p>
+</div></div>
+
+<div id="page-main" class="page"><div class="top"><div class="title">DDchat</div><div style="display:flex;gap:8px"><div class="iconBtn" style="background:#5f2ee0;padding:6px 12px;border-radius:20px;cursor:pointer" onclick="newChat()">+</div></div></div>
+<div class="searchWrap"><input id="mainSearch" class="sInput" placeholder="Search DD ID..." oninput="renderChats()"></div>
+<div class="chatList" id="chatList"></div>
+<div class="bottom"><div class="navItem active"><div>💬</div>Chats</div><div class="navItem" onclick="showPage('page-you')"><div>👤</div>You</div></div></div>
+
+<div id="page-chat" class="page"><div class="top"><div class="back" onclick="showPage('page-main')">‹</div><div class="avatar" id="cAvatar">D</div><div style="flex:1;margin-left:8px"><b id="cName">Name</b></div></div>
+<div id="cMessages" style="flex:1;overflow:auto;background:#080412;padding:12px;display:flex;flex-direction:column"></div>
+<div style="padding:10px;background:#111b21;display:flex;gap:8px"><input id="msgInput" class="sInput" style="flex:1" placeholder="Type message..."><div style="background:#5f2ee0;padding:8px 14px;border-radius:20px;cursor:pointer" onclick="sendMsg()">➤</div></div></div>
+
+<div id="page-you" class="page"><div class="top"><div class="title" id="youTitle">You</div><div style="background:#5f2ee0;padding:6px 12px;border-radius:20px;cursor:pointer" onclick="showPage('page-profileEdit')">Edit</div></div>
+<div style="flex:1;overflow:auto;padding:20px;text-align:center"><div class="avatar" style="width:100px;height:100px;margin:0 auto;font-size:40px" id="youAvatar">👤</div><h3 id="youName2" style="margin-top:10px">Da Demon Hub</h3><p id="youId" style="color:#5f2ee0"></p>
+<div class="card" style="text-align:left;margin-top:20px"><div class="row"><b>DD ID</b><span id="pDdid"></span></div><div class="row"><b>Gmail</b><span id="pGmail"></span></div><div class="row"><b>Username</b><span id="pUsername"></span></div><div class="row"><b>Phone</b><span id="pPhone"></span></div></div>
+<button class="btn" style="background:#2a3942" onclick="logout()">Logout</button></div>
+<div class="bottom"><div class="navItem" onclick="showPage('page-main')"><div>💬</div>Chats</div><div class="navItem active"><div>👤</div>You</div></div></div>
+
+<div id="page-profileEdit" class="page"><div class="top"><div class="back" onclick="showPage('page-you')">‹</div><div class="title">Profile</div></div>
+<div style="flex:1;overflow:auto;padding:10px"><div class="card">
+<div class="row" onclick="editField('name')"><b>Name</b><span id="pName"></span><span>›</span></div>
+<div class="row" onclick="editField('ddid')"><b>DD ID</b><span id="pDdid2" style="color:#5f2ee0"></span><span>›</span></div>
+<div class="row" onclick="editField('gmail')"><b>Gmail</b><span id="pGmail2" style="color:#5f2ee0"></span><span>›</span></div>
+<div class="row" onclick="editField('username')"><b>Username</b><span id="pUsername2" style="color:#5f2ee0"></span><span>›</span></div>
+<div class="row" onclick="editField('phone')"><b>Phone</b><span id="pPhone2" style="color:#5f2ee0"></span><span>›</span></div>
+</div></div></div>
+
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import {getFirestore,collection,addDoc,doc,setDoc,getDoc,getDocs,query,where,onSnapshot,orderBy,serverTimestamp} from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 const firebaseConfig={apiKey:"AIzaSyAnau0kpL3bZXC4gZp9EBcAWjOT0SNAYyQ",authDomain:"ddchat-e576d.firebaseapp.com",projectId:"ddchat-e576d",storageBucket:"ddchat-e576d.firebasestorage.app",messagingSenderId:"152427416254",appId:"1:152427416254:web:e9dd4a5bfa6219a27dacef"};
-let db=null;try{const app=initializeApp(firebaseConfig);db=getFirestore(app);}catch(e){}
+const app=initializeApp(firebaseConfig); const db=getFirestore(app);
 window.db=db; window.fns={collection,addDoc,doc,setDoc,getDoc,getDocs,query,where,onSnapshot,orderBy,serverTimestamp};
 </script>
-<script>
-// ... keep your same variables above ...
-let curUser={name:'Da Demon Hub',id:'',phone:'',email:'',username:'',lang:'English',pass:'',about:'😁 Today in emoji...',photo:''};
 
+<script>
+let curUser=JSON.parse(localStorage.getItem('dd_user')||'null')||{id:'',name:'',email:'',username:'',phone:'',pass:'',about:'😁',photo:''};
+let chats=JSON.parse(localStorage.getItem('dd_chats')||'[]');
+let selectedChat=null;
+
+function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');if(id=='page-main')renderChats();if(id=='page-you'||id=='page-profileEdit')renderProfile();}
+function save(){localStorage.setItem('dd_user',JSON.stringify(curUser));localStorage.setItem('dd_chats',JSON.stringify(chats));}
+function renderProfile(){
+  document.getElementById('youTitle').innerText=curUser.name||'You';
+  document.getElementById('youName2').innerText=curUser.name||'You';
+  document.getElementById('youId').innerText=curUser.id||'';
+  document.getElementById('pName').innerText=curUser.name||'';
+  document.getElementById('pDdid').innerText=curUser.id||''; document.getElementById('pDdid2').innerText=curUser.id||'';
+  document.getElementById('pGmail').innerText=curUser.email||''; document.getElementById('pGmail2').innerText=curUser.email||'';
+  document.getElementById('pUsername').innerText=curUser.username||''; document.getElementById('pUsername2').innerText=curUser.username||'';
+  document.getElementById('pPhone').innerText=curUser.phone||''; document.getElementById('pPhone2').innerText=curUser.phone||'';
+}
 async function login(){
   let input=document.getElementById('authEmail').value.trim();
   let pass=document.getElementById('authPass').value.trim();
-  let phoneInput=document.getElementById('authPhone').value.trim();
-  if(!input||!pass){alert('Enter ID/Email/Username/Phone + Password');return;}
-  
-  if(!window.db){alert('No internet');return;}
-  
-  // 1. Try find existing user by any field
-  let found=null;
-  let checks=[
-    {field:'id',value:input.toUpperCase()},
-    {field:'email',value:input.toLowerCase()},
-    {field:'username',value:input.toLowerCase().replace('@','')},
-    {field:'phone',value:phoneInput||input}
-  ];
-  
-  for(let c of checks){
-    if(!c.value) continue;
-    try{
-      let q=window.fns.query(window.fns.collection(window.db,'users'), window.fns.where(c.field,'==',c.value));
-      let snap=await window.fns.getDocs(q);
-      if(!snap.empty){ found=snap.docs[0].data(); break; }
-    }catch(e){}
-  }
-  
-  // 2. If found - check password and login
-  if(found){
-    if(found.pass!==pass){alert('Wrong password for '+found.id);return;}
-    curUser={...curUser,...found};
-    save(); renderProfileFields(); showPage('page-main'); renderChats();
-    return;
-  }
-  
-  // 3. If not found - CREATE new valid account
-  let newId = input.startsWith('DD-') ? input.toUpperCase() : 'DD-'+Math.floor(10000+Math.random()*90000);
-  let newUsername = input.includes('@') ? input.split('@')[0].toLowerCase() : input.replace('DD-','').toLowerCase();
-  
-  let newUser={
-    id:newId,
-    email: input.includes('@')? input.toLowerCase() : (curUser.email||''),
-    username: newUsername,
-    phone: phoneInput||'',
-    name: newUsername||'New User',
-    pass: pass,
-    about:'😁 Today in emoji...',
-    photo:'',
-    created:Date.now()
-  };
-  
-  await window.fns.setDoc(window.fns.doc(window.db,'users',newId), newUser);
-  curUser={...curUser,...newUser};
-  save(); renderProfileFields(); showPage('page-main'); renderChats();
-  alert('Account created ✅\nYour DD ID: '+newId+'\nNow you can login with DD ID / Gmail / Username / Phone + Password');
+  let msg=document.getElementById('authMsg');
+  if(!input||!pass){alert('Enter ID + Password');return;}
+  msg.innerText='Checking...';
+  try{
+    // Try find by id, email, username, phone
+    let q1=window.fns.query(window.fns.collection(window.db,'users'),window.fns.where('id','==',input.toUpperCase()));
+    let q2=window.fns.query(window.fns.collection(window.db,'users'),window.fns.where('email','==',input.toLowerCase()));
+    let q3=window.fns.query(window.fns.collection(window.db,'users'),window.fns.where('username','==',input.toLowerCase().replace('@','')));
+    let q4=window.fns.query(window.fns.collection(window.db,'users'),window.fns.where('phone','==',input));
+    let snaps=await Promise.all([window.fns.getDocs(q1),window.fns.getDocs(q2),window.fns.getDocs(q3),window.fns.getDocs(q4)]);
+    let found=null; for(let s of snaps){ if(!s.empty){found=s.docs[0].data(); break;} }
+    
+    if(found){
+      if(found.pass!==pass){msg.innerText='Wrong password'; alert('Wrong password'); return;}
+      curUser=found; save(); renderProfile(); showPage('page-main'); renderChats(); msg.innerText=''; return;
+    }
+    // Create new
+    let newId = input.startsWith('DD-') ? input.toUpperCase() : 'DD-'+Math.floor(10000+Math.random()*90000);
+    let uname = input.includes('@')? input.split('@')[0].toLowerCase() : input.replace(/[^a-z0-9]/gi,'').toLowerCase();
+    let newUser={id:newId,email:input.includes('@')?input.toLowerCase():'',username:uname,phone:/^[0-9+]+$/.test(input)?input:'',name:uname||'User',pass:pass,about:'😁',photo:'',created:Date.now()};
+    await window.fns.setDoc(window.fns.doc(window.db,'users',newId),newUser);
+    curUser=newUser; save(); renderProfile(); showPage('page-main'); renderChats(); alert('Account created: '+newId);
+  }catch(e){msg.innerText='Error: '+e.message; alert(e.message);}
 }
-
-// ... keep ALL your other functions same, only replace renderProfileFields with this short one ...
-
-function renderProfileFields(){
-  document.getElementById('pName').innerText=curUser.name||'Add name';
-  document.getElementById('pAbout').innerText=curUser.about||'😁 Today in emoji...';
-  document.getElementById('pUsername').innerText=curUser.username? '@'+curUser.username : 'Reserve username...';
-  document.getElementById('pPhone').innerText=curUser.phone||'Add number (private)';
-  document.getElementById('pDdid').innerText=curUser.id||'DD-';
-  document.getElementById('pGmail').innerText=curUser.email||'Add gmail';
-  document.getElementById('pLinks').innerText=userLinks.length? userLinks.length+' links' : 'Add links';
-  if(curUser.photo){
-    document.getElementById('editAvatar').innerHTML='<img src="'+curUser.photo+'">';
-    document.getElementById('youAvatar').innerHTML='<img src="'+curUser.photo+'">';
-  }
-  document.getElementById('youTitle').innerText=curUser.name;
-  document.getElementById('youName2').innerText=curUser.name;
-  document.getElementById('qrName').innerText=curUser.name;
-  document.getElementById('qrId').innerText=curUser.id;
+function renderChats(){
+  let list=document.getElementById('chatList'); if(!list) return;
+  let q=(document.getElementById('mainSearch')?.value||'').toLowerCase();
+  list.innerHTML='';
+  let filtered=chats.filter(c=>!q||c.id.toLowerCase().includes(q)||c.name.toLowerCase().includes(q));
+  if(filtered.length==0){list.innerHTML='<div style="text-align:center;padding:60px;color:#8696a0"><b>No chats</b><br><button onclick="newChat()" style="margin-top:10px;padding:10px 20px;border-radius:20px;background:#5f2ee0;color:#fff;border:none">+ New Chat</button></div>'; return;}
+  filtered.forEach(c=>{
+    let d=document.createElement('div'); d.className='chatRow';
+    d.innerHTML='<div class=avatar>'+(c.name[0]||'D')+'</div><div style=flex:1><b>'+c.name+'</b><div style=color:#8696a0;font-size:13px>'+c.id+' • '+c.msg+'</div></div>';
+    d.onclick=()=>openChat(c); list.appendChild(d);
+  });
 }
+function newChat(){
+  let id=prompt('Enter friend DD ID (e.g DD-12345):','DD-'); if(!id) return;
+  id=id.toUpperCase().trim();
+  window.fns.getDoc(window.fns.doc(window.db,'users',id)).then(s=>{
+    if(!s.exists()){alert('No user with '+id+' found. Make him create account first'); return;}
+    let u=s.data();
+    if(chats.find(c=>c.id==u.id)){alert('Already added'); return;}
+    chats.push({id:u.id,name:u.name,msg:'Hello',time:'now'}); save(); renderChats();
+  });
+}
+function openChat(c){
+  selectedChat=c; document.getElementById('cName').innerText=c.name; document.getElementById('cAvatar').innerText=c.name[0];
+  showPage('page-chat'); let box=document.getElementById('cMessages'); box.innerHTML='';
+  let chatId=[curUser.id,c.id].sort().join('_');
+  let q=window.fns.query(window.fns.collection(window.db,'messages'),window.fns.where('chatId','==',chatId),window.fns.orderBy('time'));
+  window.fns.onSnapshot(q,snap=>{box.innerHTML=''; snap.forEach(d=>{let m=d.data(); let div=document.createElement('div'); div.style.cssText='margin:6px 0;padding:8px 12px;border-radius:16px;max-width:75%;font-size:14px;'+(m.sender===curUser.id?'background:#5f2ee0;margin-left:auto':'background:#1f2c34'); div.innerText=m.text; box.appendChild(div);}); box.scrollTop=box.scrollHeight;});
+}
+async function sendMsg(){
+  let txt=document.getElementById('msgInput').value.trim(); if(!txt||!selectedChat) return;
+  let chatId=[curUser.id,selectedChat.id].sort().join('_');
+  await window.fns.addDoc(window.fns.collection(window.db,'messages'),{chatId:chatId,text:txt,sender:curUser.id,receiver:selectedChat.id,time:Date.now(),timestamp:window.fns.serverTimestamp()});
+  document.getElementById('msgInput').value=''; selectedChat.msg=txt; save(); renderChats();
+}
+function editField(f){
+  if(f=='name'){let v=prompt('Name:',curUser.name); if(v){curUser.name=v; updateUser();}}
+  else if(f=='ddid'){let v=prompt('DD ID cannot change - it is your login ID',curUser.id); }
+  else if(f=='gmail'){let v=prompt('Gmail:',curUser.email); if(v!==null){curUser.email=v.toLowerCase(); updateUser();}}
+  else if(f=='username'){let v=prompt('Username:',curUser.username); if(v!==null){curUser.username=v.toLowerCase().replace('@',''); updateUser();}}
+  else if(f=='phone'){let v=prompt('Phone:',curUser.phone); if(v!==null){curUser.phone=v; updateUser();}}
+}
+async function updateUser(){
+  await window.fns.setDoc(window.fns.doc(window.db,'users',curUser.id),curUser); save(); renderProfile();
+}
+function logout(){if(confirm('Logout?')){localStorage.removeItem('dd_user'); location.reload();}}
+function init(){
+  if(curUser&&curUser.id){ setTimeout(()=>{showPage('page-main'); renderChats(); renderProfile();},800); }
+  else{ setTimeout(()=>{showPage('page-auth');},1200); }
+}
+document.addEventListener('DOMContentLoaded',init);
 </script>
+</body></html>
