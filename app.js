@@ -32,9 +32,11 @@ function showModal(title, bodyHtml) {
 }
 $("#modalClose").onclick = () => $("#modal").classList.add("hidden");
 
+let authChecked = false;
 setTimeout(() => {
-  if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen");
-  else showScreen("language-screen");
+  if(!authChecked){
+    if(!localStorage.getItem("ddchat_lang")) showScreen("language-screen");
+  }
 }, 1800);
 
 const LANGUAGES = [
@@ -86,12 +88,17 @@ $("#authBtn").onclick = async () => {
 $("#forgotLink").onclick = (e)=>{ e.preventDefault(); showModal("Reset","Contact support: flatking43@gmail.com"); };
 
 onAuthStateChanged(auth, async (user) => {
+  authChecked = true;
   if (user) {
     currentUser = user;
     const snap = await getDoc(doc(db, "users", user.uid));
     if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase(); }
     showScreen("app"); loadChats(); loadGroups(); loadStatus(); loadCalls();
-  } else { currentUser=null; showScreen("auth-screen"); }
+  } else {
+    currentUser=null;
+    if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen");
+    else showScreen("language-screen");
+  }
 });
 
 $$("#bottomnav button").forEach(btn => {
