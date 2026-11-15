@@ -5,7 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import {
   getFirestore, collection, addDoc, onSnapshot, query, where,
-  orderBy, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs
+  orderBy, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment
 } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -32,7 +32,6 @@ function showModal(title, bodyHtml) {
 }
 $("#modalClose").onclick = () => $("#modal").classList.add("hidden");
 
-// SPLASH
 setTimeout(() => {
   if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen");
   else showScreen("language-screen");
@@ -60,7 +59,6 @@ renderLanguages();
 $("#langSearch").oninput = (e) => renderLanguages(e.target.value);
 $("#langContinue").onclick = () => { localStorage.setItem("ddchat_lang", selectedLang); showScreen("auth-screen"); };
 
-// AUTH SWITCH
 $("#switchAuth").onclick = (e) => {
   e.preventDefault(); isSignup = !isSignup;
   $("#authTitle").textContent = isSignup ? "Sign Up" : "Log In";
@@ -87,7 +85,6 @@ $("#authBtn").onclick = async () => {
 
 $("#forgotLink").onclick = (e)=>{ e.preventDefault(); showModal("Reset","Contact support: flatking43@gmail.com"); };
 
-// AUTH STATE
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
@@ -97,7 +94,6 @@ onAuthStateChanged(auth, async (user) => {
   } else { currentUser=null; showScreen("auth-screen"); }
 });
 
-// BOTTOM NAV
 $$("#bottomnav button").forEach(btn => {
   btn.onclick = () => {
     $$("#bottomnav button").forEach(b => b.classList.remove("active")); btn.classList.add("active");
@@ -113,8 +109,10 @@ function loadChats(){
     const list=$("#chatList"); list.innerHTML="";
     if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username above to start.</li>"; return; }
     snap.forEach(d=>{
-      const data=d.data(); const li=document.createElement("li");
-      li.innerHTML=`<div class="avatar">${(data.lastMsg||"D")[0].toUpperCase()}</div><div><b>Chat</b><br><small>${data.lastMsg||"Start chatting"}</small></div>`;
+      const data=d.data();
+      const unread = data.unreadCount?.[currentUser.uid] || 0;
+      const li=document.createElement("li");
+      li.innerHTML=`<div class="avatar">${(data.lastMsg||"D")[0].toUpperCase()}</div><div style="flex:1"><b>Chat</b><br><small>${data.lastMsg||"Start chatting"}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`;
       li.onclick=()=>openChat(d.id,data.members.find(m=>m!==currentUser.uid)); list.appendChild(li);
     });
   });
@@ -131,12 +129,13 @@ $("#chatSearch").oninput = async (e)=>{
 async function startChat(otherUid){
   const members=[currentUser.uid,otherUid].sort(); const chatId=members.join("_");
   const ref=doc(db,"chats",chatId); const snap=await getDoc(ref);
-  if(!snap.exists()) await setDoc(ref,{members,lastMsg:"",updated:serverTimestamp()}); openChat(chatId,otherUid);
+  if(!snap.exists()) await setDoc(ref,{members,lastMsg:"",unreadCount:{[currentUser.uid]:0,[otherUid]:0},updated:serverTimestamp()}); openChat(chatId,otherUid);
 }
 
 function openChat(chatId,otherUid){
   currentChatId=chatId; currentChatWith=otherUid; showScreen("chat-view");
   $("#chatTitle").textContent="Chat";
+  updateDoc(doc(db,"chats",chatId),{[ `unreadCount.${currentUser.uid}`]:0}).catch(()=>{});
   const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts"));
   onSnapshot(q,(snap)=>{
     const box=$("#chatMessages"); box.innerHTML="";
@@ -150,11 +149,10 @@ async function sendMessage(){
   const text=$("#messageInput").value.trim(); if(!text||!currentChatId) return;
   $("#messageInput").value="";
   await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text,ts:serverTimestamp()});
-  await updateDoc(doc(db,"chats",currentChatId),{lastMsg:text,updated:serverTimestamp()});
+  await updateDoc(doc(db,"chats",currentChatId),{lastMsg:text,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
 }
 $("#chatBack").onclick=()=>showScreen("app");
 
-// TRANSLATE
 document.addEventListener("click", async (e)=>{
   if(e.target.classList.contains("translate-btn")){
     const text=e.target.dataset.text; const target=localStorage.getItem("ddchat_lang")||"en";
@@ -162,7 +160,6 @@ document.addEventListener("click", async (e)=>{
   }
 });
 
-// PROFILE - EDIT
 $("#editProfileBtn").onclick= async ()=>{
   const snap=await getDoc(doc(db,"users",currentUser.uid)); const d=snap.data();
   showModal("Edit Profile",`
@@ -180,7 +177,6 @@ $("#editProfileBtn").onclick= async ()=>{
   },100);
 };
 
-// STATUS
 $("#postStatusBtn").onclick=()=>{
   showModal("Post Status",`<input id="statusText" placeholder="What's on your mind?" style="width:100%;padding:10px"/><button class="btn" id="saveStatus">Post</button>`);
   setTimeout(()=>{
@@ -199,7 +195,6 @@ function loadStatus(){
   });
 }
 
-// GROUPS
 $("#createGroupBtn").onclick=()=>{
   showModal("Create Group",`<input id="groupName" placeholder="Group name" style="width:100%;padding:10px"/><button class="btn" id="saveGroup">Create</button>`);
   setTimeout(()=>{
@@ -215,10 +210,8 @@ function loadGroups(){
   onSnapshot(q,(snap)=>{ const list=$("#groupList"); list.innerHTML=""; snap.forEach(d=>{ const g=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">G</div><div><b>${g.name}</b><br><small>${g.members.length} members</small></div>`; list.appendChild(li); }); });
 }
 
-// CALLS
 function loadCalls(){ $("#callList").innerHTML="<li style='padding:15px;color:#8696a0'>No calls yet. Voice/video calling integration coming (use WebRTC).</li>"; }
 
-// OTHER BUTTONS
 $("#qrBtn").onclick=()=>{ const url=`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${currentUser.uid}`; showModal("Your QR",`<img src="${url}" style="width:100%;border-radius:8px"/>`); };
 $("#cameraBtn").onclick=()=>{ $("#fileInput").click(); };
 $("#plusBtn").onclick=()=>{ showModal("New",`<button class="btn" onclick="document.getElementById('chatSearch').focus();document.getElementById('modal').classList.add('hidden')">💬 New Chat (search above)</button><br><br><button class="btn" id="newGroupModal">👥 New Group</button>`); setTimeout(()=>{ $("#newGroupModal").onclick=()=>{ $("#modal").classList.add("hidden"); $("#createGroupBtn").click(); }; },100); };
