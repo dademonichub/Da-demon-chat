@@ -268,18 +268,46 @@ async function startChat(otherUid){
   if(!snap.exists()) await setDoc(ref,{members,lastMsg:"",unreadCount:{[currentUser.uid]:0,[otherUid]:0},updated:serverTimestamp()}); openChat(chatId,otherUid);
 }
 
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
 function openChat(chatId,otherUid){
   currentChatId=chatId; currentChatWith=otherUid; showScreen("chat-view");
   $("#chatTitle").textContent="Chat";
   updateDoc(doc(db,"chats",chatId),{[ `unreadCount.${currentUser.uid}`]:0}).catch(()=>{});
+  const myLang = localStorage.getItem("ddchat_lang") || "en";
   const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts"));
   onSnapshot(q,(snap)=>{
     const box=$("#chatMessages"); box.innerHTML="";
-    snap.forEach(m=>{ const d=m.data(); const div=document.createElement("div"); div.className="msg "+(d.from===currentUser.uid?"me":"them"); div.innerHTML=`${escapeHtml(d.text)} <span class="translate-btn" data-text="${escapeHtml(d.text)}">🌐</span>`; box.appendChild(div); });
+    snap.forEach(m=>{
+      const d=m.data();
+      const div=document.createElement("div");
+      div.className="msg "+(d.from===currentUser.uid?"me":"them");
+      div.id="msg_"+m.id;
+      div.innerHTML=escapeHtml(d.text);
+      box.appendChild(div);
+      if(d.from!==currentUser.uid && myLang!=="en" && d.text.trim()){
+        const cacheKey = myLang+"::msg::"+d.text.trim();
+        const cached = transCache[cacheKey];
+        if(cached){
+          div.innerHTML += `<br><small style="opacity:0.7;display:block;margin-top:3px">→ ${escapeHtml(cached)}</small>`;
+        } else {
+          fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(d.text)}&langpair=auto|${myLang}`)
+            .then(r=>r.json()).then(j=>{
+              const t=j.responseData?.translatedText||"";
+              if(t && t.toLowerCase()!==d.text.toLowerCase()){
+                transCache[cacheKey]=t;
+                localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache));
+                const el=document.getElementById("msg_"+m.id);
+                if(el) el.innerHTML += `<br><small style="opacity:0.7;display:block;margin-top:3px">→ ${escapeHtml(t)}</small>`;
+              }
+            }).catch(()=>{});
+        }
+      }
+    });
     box.scrollTop=box.scrollHeight;
   });
 }
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
 $("#sendBtn").onclick=sendMessage; $("#messageInput").addEventListener("keypress",(e)=>{ if(e.key==="Enter") sendMessage(); });
 async function sendMessage(){
   const text=$("#messageInput").value.trim(); if(!text||!currentChatId) return;
@@ -288,13 +316,6 @@ async function sendMessage(){
   await updateDoc(doc(db,"chats",currentChatId),{lastMsg:text,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
 }
 $("#chatBack").onclick=()=>showScreen("app");
-
-document.addEventListener("click", async (e)=>{
-  if(e.target.classList.contains("translate-btn")){
-    const text=e.target.dataset.text; const target=localStorage.getItem("ddchat_lang")||"en";
-    try{ const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=auto|${target}`); const j=await r.json(); alert("Translated: "+(j.responseData?.translatedText||text)); }catch{ alert("Translation failed"); }
-  }
-});
 
 $("#editProfileBtn").onclick= async ()=>{
   const snap=await getDoc(doc(db,"users",currentUser.uid)); const d=snap.data();
