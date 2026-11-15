@@ -120,79 +120,26 @@ const LANGUAGES = [
   { code:"uz", name:"Uzbek" },
   { code:"cy", name:"Welsh" }
 ];
-
-// --- LANGUAGE SYSTEM ONLY - SUPPORTS ALL 70+ LANGUAGES ---
-const BASE_EN = {
-  chooseLang:"Choose your language", searchLang:"Search language", continue:"Continue", signup:"Sign Up", login:"Log In", createAcc:"Create Account", already:"Already have an account?", newHere:"New here?", name:"Name", username:"Username", email:"Email", password:"Password", forgot:"Forgot password?", searchUser:"Search username...", noChats:"No chats yet. Search username above to start.", noUser:"No user found", account:"Account", privacy:"Privacy", notifications:"Notifications", language:"Language", help:"Help", logout:"Logout", editProfile:"Edit Profile", about:"About", save:"Save", postStatus:"Post Status", whatMind:"What's on your mind?", post:"Post", createGroup:"Create Group", groupName:"Group name", create:"Create", noCalls:"No calls yet. Voice/video calling integration coming (use WebRTC).", yourQr:"Your QR", newChat:"New Chat (search above)", newGroup:"New Group", fileSelected:"File selected", profileUpdated:"Profile updated!", reset:"Reset", contactSupport:"Contact support: flatking43@gmail.com"
-};
-let currentTranslations = {...BASE_EN};
-let translationCache = JSON.parse(localStorage.getItem("ddchat_translation_cache") || "{}");
-function tr(k){ return currentTranslations[k] || BASE_EN[k] || k; }
-function applyTranslationsNow(){
-  // ONLY change text that has NO icons - so icons safe
-  if($("#langSearch")) $("#langSearch").placeholder = tr("searchLang");
-  if($("#langContinue")) $("#langContinue").textContent = tr("continue");
-  if($("#authTitle")) $("#authTitle").textContent = isSignup ? tr("signup") : tr("login");
-  if($("#authBtn")) $("#authBtn").textContent = isSignup ? tr("createAcc") : tr("login");
-  if($("#switchText")) $("#switchText").textContent = isSignup ? tr("already") : tr("newHere");
-  if($("#switchAuth")) $("#switchAuth").textContent = isSignup ? tr("login") : tr("signup");
-  if($("#forgotLink")) $("#forgotLink").textContent = tr("forgot");
-  if($("#authName")) $("#authName").placeholder = tr("name");
-  if($("#authUsername")) $("#authUsername").placeholder = tr("username");
-  if($("#authEmail")) $("#authEmail").placeholder = tr("email");
-  if($("#authPassword")) $("#authPassword").placeholder = tr("password");
-  if($("#chatSearch")) $("#chatSearch").placeholder = tr("searchUser");
-}
-async function loadTranslationsFor(lang){
-  if(lang==="en"){ currentTranslations={...BASE_EN}; applyTranslationsNow(); return; }
-  if(translationCache[lang]){ currentTranslations=translationCache[lang]; applyTranslationsNow(); return; }
-  applyTranslationsNow();
-  const newTrans={};
-  for(let k of Object.keys(BASE_EN)){
-    try{
-      const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(BASE_EN[k])}&langpair=en|${lang}`);
-      const j=await r.json();
-      newTrans[k]=j.responseData?.translatedText || BASE_EN[k];
-    }catch{ newTrans[k]=BASE_EN[k]; }
-  }
-  currentTranslations=newTrans;
-  translationCache[lang]=newTrans;
-  localStorage.setItem("ddchat_translation_cache", JSON.stringify(translationCache));
-  applyTranslationsNow();
-}
-loadTranslationsFor(selectedLang);
-// --- END LANGUAGE SYSTEM ---
-
 function renderLanguages(filter="") {
   const ul = $("#langList"); ul.innerHTML = "";
   LANGUAGES.filter(l => l.name.toLowerCase().includes(filter.toLowerCase())).forEach(l => {
     const li = document.createElement("li");
     li.textContent = l.name;
     if (l.code === selectedLang) li.classList.add("selected");
-    li.onclick = async () => { 
-      selectedLang = l.code; 
-      localStorage.setItem("ddchat_lang", l.code);
-      $$("#langList li").forEach(x=>x.classList.remove("selected")); 
-      li.classList.add("selected"); 
-      await loadTranslationsFor(l.code);
-    };
+    li.onclick = () => { selectedLang = l.code; $$("#langList li").forEach(x=>x.classList.remove("selected")); li.classList.add("selected"); };
     ul.appendChild(li);
   });
 }
 renderLanguages();
 $("#langSearch").oninput = (e) => renderLanguages(e.target.value);
-$("#langContinue").onclick = async () => { 
-  localStorage.setItem("ddchat_lang", selectedLang); 
-  await loadTranslationsFor(selectedLang);
-  showScreen("auth-screen"); 
-};
+$("#langContinue").onclick = () => { localStorage.setItem("ddchat_lang", selectedLang); showScreen("auth-screen"); };
 
 $("#switchAuth").onclick = (e) => {
   e.preventDefault(); isSignup = !isSignup;
-  $("#authTitle").textContent = isSignup ? tr("signup") : tr("login");
-  $("#authBtn").textContent = isSignup ? tr("createAcc") : tr("login");
-  $("#switchText").textContent = isSignup ? tr("already") : tr("newHere");
-  $("#switchAuth").textContent = isSignup ? tr("login") : tr("signup");
+  $("#authTitle").textContent = isSignup ? "Sign Up" : "Log In";
+  $("#authBtn").textContent = isSignup ? "Create Account" : "Log In";
+  $("#switchText").textContent = isSignup ? "Already have an account?" : "New here?";
+  $("#switchAuth").textContent = isSignup ? "Log In" : "Sign Up";
   $("#authName").style.display = isSignup ? "block" : "none";
   $("#authUsername").style.display = isSignup ? "block" : "none";
   $("#forgotLink").style.display = isSignup ? "none" : "block";
@@ -211,24 +158,14 @@ $("#authBtn").onclick = async () => {
   } catch (err) { alert(err.message); }
 };
 
-$("#forgotLink").onclick = (e)=>{ e.preventDefault(); showModal(tr("reset"),tr("contactSupport")); };
+$("#forgotLink").onclick = (e)=>{ e.preventDefault(); showModal("Reset","Contact support: flatking43@gmail.com"); };
 
 onAuthStateChanged(auth, async (user) => {
   authChecked = true;
   if (user) {
     currentUser = user;
     const snap = await getDoc(doc(db, "users", user.uid));
-    if (snap.exists()) { 
-      const d = snap.data(); 
-      $("#profileName").textContent = d.name; 
-      $("#profileUsername").textContent = "@"+d.username; 
-      $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase(); 
-      if(d.lang && d.lang!==selectedLang){
-        selectedLang = d.lang;
-        localStorage.setItem("ddchat_lang", d.lang);
-        await loadTranslationsFor(d.lang);
-      }
-    }
+    if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase(); }
     showScreen("app"); loadChats(); loadGroups(); loadStatus(); loadCalls();
   } else {
     currentUser=null;
@@ -250,7 +187,7 @@ function loadChats(){
   const q = query(collection(db, "chats"), where("members","array-contains",currentUser.uid));
   onSnapshot(q,(snap)=>{
     const list=$("#chatList"); list.innerHTML="";
-    if(snap.empty){ list.innerHTML=`<li style='padding:15px;color:#8696a0'>${tr("noChats")}</li>`; return; }
+    if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username above to start.</li>"; return; }
     snap.forEach(d=>{
       const data=d.data();
       const unread = data.unreadCount?.[currentUser.uid] || 0;
@@ -266,7 +203,7 @@ $("#chatSearch").oninput = async (e)=>{
   const q1=query(collection(db,"users"), where("username","==",term));
   const snap=await getDocs(q1); const list=$("#chatList"); list.innerHTML="";
   snap.forEach(d=>{ const u=d.data(); if(u.uid===currentUser.uid) return; const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${u.name[0]}</div><div><b>${u.name}</b><br><small>@${u.username}</small></div>`; li.onclick=()=>startChat(u.uid); list.appendChild(li); });
-  if(list.innerHTML==="") list.innerHTML=`<li style='padding:15px'>${tr("noUser")}</li>`;
+  if(list.innerHTML==="") list.innerHTML="<li style='padding:15px'>No user found</li>";
 };
 
 async function startChat(otherUid){
@@ -305,23 +242,23 @@ document.addEventListener("click", async (e)=>{
 
 $("#editProfileBtn").onclick= async ()=>{
   const snap=await getDoc(doc(db,"users",currentUser.uid)); const d=snap.data();
-  showModal(tr("editProfile"),`
-    <input id="editName" value="${d.name}" placeholder="${tr("name")}" style="width:100%;margin:8px 0;padding:10px;border-radius:8px"/>
-    <input id="editAbout" value="${d.about}" placeholder="${tr("about")}" style="width:100%;margin:8px 0;padding:10px;border-radius:8px"/>
-    <button class="btn" id="saveProfile">${tr("save")}</button>
+  showModal("Edit Profile",`
+    <input id="editName" value="${d.name}" placeholder="Name" style="width:100%;margin:8px 0;padding:10px;border-radius:8px"/>
+    <input id="editAbout" value="${d.about}" placeholder="About" style="width:100%;margin:8px 0;padding:10px;border-radius:8px"/>
+    <button class="btn" id="saveProfile">Save</button>
   `);
   setTimeout(()=>{
     $("#saveProfile").onclick= async ()=>{
       const name=$("#editName").value.trim(); const about=$("#editAbout").value.trim();
       await updateDoc(doc(db,"users",currentUser.uid),{name,about,avatar:name[0].toUpperCase()});
       $("#profileName").textContent=name; $("#profileAvatar").textContent=name[0].toUpperCase();
-      $("#modal").classList.add("hidden"); alert(tr("profileUpdated"));
+      $("#modal").classList.add("hidden"); alert("Profile updated!");
     };
   },100);
 };
 
 $("#postStatusBtn").onclick=()=>{
-  showModal(tr("postStatus"),`<input id="statusText" placeholder="${tr("whatMind")}" style="width:100%;padding:10px"/><button class="btn" id="saveStatus">${tr("post")}</button>`);
+  showModal("Post Status",`<input id="statusText" placeholder="What's on your mind?" style="width:100%;padding:10px"/><button class="btn" id="saveStatus">Post</button>`);
   setTimeout(()=>{
     $("#saveStatus").onclick= async ()=>{
       const text=$("#statusText").value.trim(); if(!text) return;
@@ -339,7 +276,7 @@ function loadStatus(){
 }
 
 $("#createGroupBtn").onclick=()=>{
-  showModal(tr("createGroup"),`<input id="groupName" placeholder="${tr("groupName")}" style="width:100%;padding:10px"/><button class="btn" id="saveGroup">${tr("create")}</button>`);
+  showModal("Create Group",`<input id="groupName" placeholder="Group name" style="width:100%;padding:10px"/><button class="btn" id="saveGroup">Create</button>`);
   setTimeout(()=>{
     $("#saveGroup").onclick= async ()=>{
       const name=$("#groupName").value.trim(); if(!name) return;
@@ -353,12 +290,12 @@ function loadGroups(){
   onSnapshot(q,(snap)=>{ const list=$("#groupList"); list.innerHTML=""; snap.forEach(d=>{ const g=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">G</div><div><b>${g.name}</b><br><small>${g.members.length} members</small></div>`; list.appendChild(li); }); });
 }
 
-function loadCalls(){ $("#callList").innerHTML=`<li style='padding:15px;color:#8696a0'>${tr("noCalls")}</li>`; }
+function loadCalls(){ $("#callList").innerHTML="<li style='padding:15px;color:#8696a0'>No calls yet. Voice/video calling integration coming (use WebRTC).</li>"; }
 
-$("#qrBtn").onclick=()=>{ const url=`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${currentUser.uid}`; showModal(tr("yourQr"),`<img src="${url}" style="width:100%;border-radius:8px"/>`); };
+$("#qrBtn").onclick=()=>{ const url=`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${currentUser.uid}`; showModal("Your QR",`<img src="${url}" style="width:100%;border-radius:8px"/>`); };
 $("#cameraBtn").onclick=()=>{ $("#fileInput").click(); };
-$("#plusBtn").onclick=()=>{ showModal("New",`<button class="btn" onclick="document.getElementById('chatSearch').focus();document.getElementById('modal').classList.add('hidden')">💬 ${tr("newChat")}</button><br><br><button class="btn" id="newGroupModal">👥 ${tr("newGroup")}</button>`); setTimeout(()=>{ $("#newGroupModal").onclick=()=>{ $("#modal").classList.add("hidden"); $("#createGroupBtn").click(); }; },100); };
-$("#fileInput").onchange=(e)=>{ const file=e.target.files[0]; if(file) alert(`${tr("fileSelected")}: ${file.name}`); };
+$("#plusBtn").onclick=()=>{ showModal("New",`<button class="btn" onclick="document.getElementById('chatSearch').focus();document.getElementById('modal').classList.add('hidden')">💬 New Chat (search above)</button><br><br><button class="btn" id="newGroupModal">👥 New Group</button>`); setTimeout(()=>{ $("#newGroupModal").onclick=()=>{ $("#modal").classList.add("hidden"); $("#createGroupBtn").click(); }; },100); };
+$("#fileInput").onchange=(e)=>{ const file=e.target.files[0]; if(file) alert("File selected: "+file.name+" - upload to Firebase Storage coming next"); };
 
 $$(".settings-list li").forEach(li=>{
   li.onclick=()=>{
