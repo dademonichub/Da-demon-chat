@@ -1,11 +1,13 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 enableIndexedDbPersistence(db).catch((err)=>{ if(err.code !== 'failed-precondition') console.log("Offline cache:", err.code); });
 
 let currentUser = null; let currentChatId = null; let currentChatWith = null; let isSignup = true;
@@ -94,6 +96,113 @@ function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<"
 
 function formatTimeWithAMPM(date){ if(!date) return ""; return date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true}); }
 
+// ================= FIX 1,2,3 START - DO NOT REMOVE =================
+let currentViewerFile = { url:"", name:"", type:"" };
+let currentOcrText = "";
+function saveFileGlobal(url, name){ const a=document.createElement("a"); a.href=url; a.download=name||"file"; document.body.appendChild(a); a.click(); a.remove(); }
+window.saveFileGlobal = saveFileGlobal;
+
+function openFileViewer(url, fileName, type){
+  currentViewerFile = { url, name: fileName, type };
+  currentOcrText="";
+  let modal = document.getElementById("fileViewerModal");
+  if(!modal){ createFileViewerModal(); modal=document.getElementById("fileViewerModal"); }
+  $("#viewerFileName").textContent=fileName;
+  const content = $("#viewerContent");
+  if(type==="image"){
+    content.innerHTML=`<img id="viewerImg" src="${url}" style="max-width:100%;max-height:65vh;border-radius:12px;display:block;margin:auto"><div id="ocrResult" style="margin-top:12px;color:#aaa;font-size:13px;white-space:pre-wrap"></div>`;
+  } else if(type==="audio" || type==="voice"){
+    content.innerHTML=`<audio controls src="${url}" style="width:100%"></audio><div id="ocrResult" style="margin-top:10px"></div>`;
+  } else {
+    content.innerHTML=`<div style="text-align:center;padding:20px"><div style="font-size:50px">📄</div><p>${escapeHtml(fileName)}</p><iframe src="${url}" style="width:100%;height:50vh;border:none;border-radius:10px;margin-top:10px"></iframe></div><div id="ocrResult"></div>`;
+  }
+  $("#viewerTranslation").innerHTML="";
+  modal.style.display="flex";
+  if(localStorage.getItem("ddchat_lang") && localStorage.getItem("ddchat_lang")!=="en") setTimeout(()=>translateApp(localStorage.getItem("ddchat_lang")),100);
+}
+window.openFileViewer=openFileViewer;
+function closeFileViewer(){ const m=document.getElementById("fileViewerModal"); if(m) m.style.display="none"; }
+window.closeFileViewer=closeFileViewer;
+function createFileViewerModal(){
+  const div=document.createElement("div");
+  div.id="fileViewerModal";
+  div.style.cssText="position:fixed;inset:0;z-index:999999;display:none;align-items:center;justify-content:center;";
+  div.innerHTML=`<div id="fileViewerBackdrop" onclick="closeFileViewer()" style="position:absolute;inset:0;background:rgba(0,0,0,0.85)"></div>
+  <div id="fileViewerBox" style="position:relative;background:#121212;width:95%;max-width:600px;max-height:90vh;overflow-y:auto;border-radius:16px;padding:0;z-index:2;display:flex;flex-direction:column">
+    <div id="viewerHeader" style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #222;position:sticky;top:0;background:#121212">
+      <span id="viewerFileName" style="font-weight:bold;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%">File</span>
+      <button onclick="closeFileViewer()" style="background:#222;border:none;color:white;width:36px;height:36px;border-radius:50%;font-size:18px">✕</button>
+    </div>
+    <div id="viewerContent" style="padding:12px"></div>
+    <div id="viewerActions" style="display:flex;gap:10px;padding:12px">
+      <button onclick="saveFileGlobal(currentViewerFile.url, currentViewerFile.name)" style="flex:1;padding:12px;border-radius:10px;border:none;background:#5E35B1;color:white;font-weight:bold;cursor:pointer">💾 Save</button>
+      <button onclick="translateFileText()" style="flex:1;padding:12px;border-radius:10px;border:none;background:#1e88e5;color:white;font-weight:bold;cursor:pointer">🌐 Translate Text Inside</button>
+    </div>
+    <div id="viewerTranslation" style="padding:12px"></div>
+  </div>`;
+  document.body.appendChild(div);
+}
+window.translateFileText = async function(){
+  const resEl=document.getElementById("viewerTranslation");
+  const ocrEl=document.getElementById("ocrResult");
+  resEl.innerHTML="🔍 Reading text inside...";
+  try{
+    if(currentViewerFile.type==="image"){
+      if(!window.Tesseract){
+        resEl.innerHTML="Loading OCR engine...";
+        await new Promise((r,j)=>{ const s=document.createElement("script"); s.src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"; s.onload=r; s.onerror=j; document.head.appendChild(s); });
+      }
+      const { data:{text} } = await Tesseract.recognize(currentViewerFile.url, "eng");
+      currentOcrText=text.trim();
+      ocrEl.innerText=currentOcrText ? `Found: ${currentOcrText.slice(0,500)}` : "No text found in picture";
+    } else {
+      currentOcrText=currentViewerFile.name;
+      ocrEl.innerText="For documents, translating filename. If image doc, try opening as image.";
+    }
+    if(!currentOcrText){ resEl.innerHTML="No text to translate"; return; }
+    resEl.innerHTML="Translating...";
+    const toLang=localStorage.getItem("ddchat_lang")||"en";
+    const translated=await googleTranslate(currentOcrText,"auto",toLang);
+    resEl.innerHTML=`<div style="background:#1e1e1e;padding:12px;border-radius:10px;color:white"><b>Translated (${toLang}):</b><br><div style="margin-top:8px;white-space:pre-wrap">${escapeHtml(translated)}</div><button onclick="saveFileGlobal('data:text/plain;charset=utf-8,'+encodeURIComponent('${translated.replace(/'/g,"")}'), 'translated.txt')" style="margin-top:10px;padding:8px 12px;border-radius:8px;background:#333;color:white;border:none">Save Translation</button></div>`;
+  }catch(e){ resEl.innerHTML="Error: "+e.message; }
+};
+
+function getFileBubbleHtml(d){
+  // REAL FILE - NOT TEXT
+  const fileName = d.fileName || d.text?.replace("📎 ","") || "file";
+  const fileUrl = d.fileUrl || d.audioUrl || "";
+  const fileType = d.fileType || "";
+  const isImage = fileType.startsWith("image/") || d.msgType==="image";
+  const isVoice = fileType.startsWith("audio/") || d.msgType==="voice" || d.msgType==="audio";
+  
+  if(!fileUrl) return null;
+  
+  if(isImage){
+    return `<div class="real-file-box" onclick="openFileViewer('${fileUrl}','${escapeHtml(fileName)}','image')" style="cursor:pointer"><img src="${fileUrl}" alt="${escapeHtml(fileName)}" style="max-width:220px;max-height:220px;border-radius:12px;display:block;object-fit:cover"><div style="font-size:11px;color:#ddd;margin-top:4px">${escapeHtml(fileName)} - Tap to view</div></div>`;
+  } else if(isVoice){
+    const transcript = d.transcript || d.translatedTranscript || "";
+    const toLang = localStorage.getItem("ddchat_lang")||"en";
+    return `<div class="real-file-box voice-box" style="min-width:200px"><audio controls src="${fileUrl}" style="width:100%;height:40px"></audio><div style="font-size:12px;margin-top:6px;background:rgba(255,255,255,0.08);padding:6px 8px;border-radius:8px">${transcript ? `<div>🗣 ${escapeHtml(transcript)}</div>` : `<div style="color:#aaa">🎤 Voice - ${escapeHtml(fileName)}</div>`}${d.translatedTranscript ? `<div style="margin-top:4px;color:#8ab4f8">🌐 ${escapeHtml(d.translatedTranscript)}</div>` : ``}<div style="margin-top:4px"><button onclick="event.stopPropagation(); translateVoiceInBubble(this, '${fileUrl}', \`${(transcript||fileName).replace(/`/g,"'")}\`)" style="background:#5E35B1;border:none;color:white;padding:4px 8px;border-radius:6px;font-size:11px">Translate to ${toLang}</button></div></div></div>`;
+  } else {
+    const icon = fileType.includes("pdf") ? "📄" : "📁";
+    return `<div class="real-file-box doc-box" onclick="openFileViewer('${fileUrl}','${escapeHtml(fileName)}','doc')" style="display:flex;align-items:center;gap:10px;background:#1e1e2e;padding:12px;border-radius:12px;cursor:pointer;min-width:180px"><div style="font-size:28px">${icon}</div><div style="flex:1"><div style="font-weight:bold;font-size:13px;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">${escapeHtml(fileName)}</div><div style="font-size:11px;color:#aaa">${fileType||"Document"} - Tap to open</div></div><div style="background:#5E35B1;color:white;padding:6px 10px;border-radius:8px;font-size:12px">Open</div></div>`;
+  }
+}
+window.translateVoiceInBubble = async function(btn, url, originalText){
+  const toLang = localStorage.getItem("ddchat_lang")||"en";
+  if(!originalText) { btn.innerText="No transcript"; return; }
+  btn.innerText="Translating...";
+  try{
+    const translated = await googleTranslate(originalText,"auto",toLang);
+    const parent = btn.closest(".voice-box");
+    let el = parent.querySelector(".translated-voice");
+    if(!el){ el=document.createElement("div"); el.className="translated-voice"; el.style.cssText="margin-top:6px;color:#8ab4f8;font-size:12px"; parent.appendChild(el); }
+    el.innerText="🌐 "+translated;
+    btn.innerText="Translated ✓";
+  }catch{ btn.innerText="Failed"; }
+};
+// ================= FIX 1,2,3 END =================
+
 function openChat(chatId,otherUid,passedName=""){ 
   currentChatId=chatId; currentChatWith=otherUid; 
   showScreen("chat-view"); 
@@ -115,7 +224,6 @@ function openChat(chatId,otherUid,passedName=""){
     if(chatAboutBubble){ chatAboutBubble.style.display = aboutText ? "block" : "none"; }
   }
 
-  // I enter this individual chat - mark Online for other person
   if(currentUser){
     updateDoc(doc(db,"users",currentUser.uid),{currentChatWith: otherUid, isOnline:true, lastSeen:serverTimestamp()}).catch(()=>{});
   }
@@ -152,11 +260,18 @@ function openChat(chatId,otherUid,passedName=""){
         else if(d.status==="delivered" || userCache[otherUid]?.isOnline){ tickClass="delivered"; tickIcon=`<i class="fas fa-check-double"></i>`; }
       }
       const ticks = d.from===currentUser.uid ? `<span class="ticks ${tickClass}">${tickIcon}</span>` : "";
-      bubble.innerHTML=`<span class="msg-text">${escapeHtml(d.text)}</span><span class="msg-time">${timeStr} ${ticks}</span>`;
+      
+      // ===== FIXED RENDER - CHECK FILE FIRST =====
+      const fileHtml = getFileBubbleHtml(d);
+      if(fileHtml){
+        bubble.innerHTML=`${fileHtml}<span class="msg-time">${timeStr} ${ticks}</span>`;
+      } else {
+        bubble.innerHTML=`<span class="msg-text">${escapeHtml(d.text)}</span><span class="msg-time">${timeStr} ${ticks}</span>`;
+      }
+      
       row.appendChild(bubble);
       box.appendChild(row);
 
-      // auto read when I am inside chat and receive
       if(d.from!==currentUser.uid && currentChatWith===d.from){
         if(d.status!=="read") updateDoc(doc(db,"chats",currentChatId,"messages",d.id),{status:"read", read:true}).catch(()=>{});
       }
@@ -191,26 +306,62 @@ const chatVideoCall = document.getElementById('chatVideoCall');
 const chatVoiceCall = document.getElementById('chatVoiceCall');
 
 plusChat?.addEventListener('click', ()=> fileInput?.click());
+
+// ===== FIXED FILE INPUT - REAL FILE UPLOAD =====
 fileInput?.addEventListener('change', async (e)=>{
   const f=e.target.files[0]; if(!f||!currentChatId) return;
-  await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,ts:serverTimestamp(), status:"sent"});
-  await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+  const myLang = localStorage.getItem("ddchat_lang") || "en";
+  try{
+    $("#chatMessages").insertAdjacentHTML("beforeend", `<div class="msg-row out"><div class="bubble out"><span class="msg-text">Uploading ${escapeHtml(f.name)}... ⏳</span></div></div>`);
+    const fileRef = ref(storage, `chat_files/${currentChatId}/${Date.now()}_${f.name}`);
+    await uploadBytes(fileRef, f);
+    const url = await getDownloadURL(fileRef);
+    const isImage = f.type.startsWith("image/");
+    const msgType = isImage ? "image" : "file";
+    await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,fileUrl:url,fileName:f.name,fileType:f.type,msgType:msgType,ts:serverTimestamp(), status:"sent"});
+    await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+  }catch(err){
+    alert("Upload failed: "+err.message+" - Check Storage Rules");
+  }
+  e.target.value="";
 });
+
 let recState=null;
+let mediaChunks=[];
+
+// ===== FIXED MIC - REAL VOICE UPLOAD + TRANSLATE =====
 micBtn?.addEventListener('click', async ()=>{
   if(recState?.state=="recording"){ recState.stop(); micBtn.innerHTML='<i class="fas fa-microphone"></i>'; return; }
   try{
     const stream=await navigator.mediaDevices.getUserMedia({audio:true});
     const rec=new MediaRecorder(stream); recState=rec;
-    let chunks=[]; rec.ondataavailable=e=>chunks.push(e.data);
+    mediaChunks=[]; rec.ondataavailable=e=>mediaChunks.push(e.data);
     rec.onstop=async()=>{
-      if(!currentChatId) return;
-      await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice message",ts:serverTimestamp()});
-      await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice message",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+      if(!currentChatId || mediaChunks.length===0) return;
+      try{
+        const blob = new Blob(mediaChunks, {type:"audio/webm"});
+        const fileName = `voice_${Date.now()}.webm`;
+        $("#chatMessages").insertAdjacentHTML("beforeend", `<div class="msg-row out"><div class="bubble out"><span class="msg-text">Uploading voice... ⏳</span></div></div>`);
+        const audioRef = ref(storage, `voice/${currentChatId}/${fileName}`);
+        await uploadBytes(audioRef, blob);
+        const url = await getDownloadURL(audioRef);
+        // Transcript placeholder - will be translated to account language
+        const toLang = localStorage.getItem("ddchat_lang") || "en";
+        let transcript = "Voice message";
+        let translatedTranscript = "";
+        try{
+          translatedTranscript = await googleTranslate(transcript,"auto",toLang);
+        }catch{}
+        await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice message",audioUrl:url,fileUrl:url,fileName:fileName,fileType:"audio/webm",msgType:"voice",transcript:transcript,translatedTranscript:translatedTranscript,ts:serverTimestamp(), status:"sent"});
+        await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice message",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+      }catch(err){ alert("Voice upload failed: "+err.message); }
+      stream.getTracks().forEach(t=>t.stop());
+      mediaChunks=[];
     };
     rec.start(); micBtn.innerHTML='<i class="fas fa-stop" style="color:#ff3b3b"></i>';
   }catch{ alert("Mic permission needed"); }
 });
+
 stickerBtn?.addEventListener('click', ()=>{ if(!currentChatId) return; document.getElementById('messageInput').value+=" 😊"; });
 chatVideoCall?.addEventListener('click', ()=> showModal("Video Call","Video calling soon"));
 chatVoiceCall?.addEventListener('click', ()=> showModal("Voice Call","Voice calling soon"));
@@ -221,6 +372,7 @@ $("#createGroupBtn").onclick=()=>{ showModal("Create Group",`<input id="groupNam
 function loadGroups(){ const q=query(collection(db,"groups"), where("members","array-contains",currentUser.uid)); onSnapshot(q,(snap)=>{ const list=$("#groupList"); list.innerHTML=""; snap.forEach(d=>{ const g=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">G</div><div><b>${g.name}</b><br><small>${g.members.length} members</small></div>`; list.appendChild(li); }); }); }
 function loadCalls(){ $("#callList").innerHTML="<li style='padding:15px;color:#8696a0'>No calls yet.</li>"; }
 document.addEventListener("DOMContentLoaded", ()=>{
+  createFileViewerModal();
   const scrollArea = document.getElementById('profileScrollArea');
   const stickyName = document.getElementById('profileStickyName');
   if(scrollArea && stickyName){
