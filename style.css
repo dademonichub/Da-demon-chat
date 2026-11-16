@@ -93,38 +93,60 @@ body { background:#0f0a1e; color:#e9edef; height:100vh; overflow:hidden; }
   margin-left:auto;
 }
 
-/* ================= FIXES FOR YOUR 5 COMPLAINTS ONLY ================= */
+/* ================= FIXED FOR YOUR ISSUES - ABOUT UNDER + ONLINE + TICKS ================= */
 
-/* 1. About bubble to left top corner attached to round profile */
-#chatAvatarWrap{ overflow: visible !important; }
+/* Avatar wrap - allow bubble under */
+#chatAvatarWrap{ overflow: visible !important; position: relative !important; width:44px; height:44px; flex-shrink:0; }
+
+/* ABOUT - UNDER AVATAR LIKE SCREENSHOT */
 #chatAboutBubble{
-  position: absolute;
-  top: -10px;
-  left: -8px;
-  background: #fff;
-  color: #1e1250;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 2px 7px;
-  border-radius: 10px;
-  white-space: nowrap;
-  max-width: 90px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  z-index: 5;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-  border: 1px solid #7C4DFF;
+  position: absolute !important;
+  top: 48px !important;
+  left: 0 !important;
+  background: #1e1e1e !important;
+  color: #fff !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 6px 14px !important;
+  border-radius: 18px !important;
+  white-space: nowrap !important;
+  max-width: 200px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  z-index: 30 !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6) !important;
+  border: none !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
 }
-#chatAboutBubble:empty{ display:none; }
+#chatAboutBubble::before{
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 18px;
+  width: 10px;
+  height: 10px;
+  background: #1e1e1e;
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+#chatAboutBubble:empty{ display:none !important; }
+#chatAboutBubble #chatAboutStatus{
+  color:#fff !important;
+  font-size:12px !important;
+}
 
-/* 2 & 3. Last seen wrapper slide for AM/PM - not cut */
-#chatSub{ overflow: visible !important; }
+/* LAST SEEN - SLIDE FOR AM/PM */
+#chatHeader{ overflow: visible !important; }
+#chatInfo{ overflow: visible !important; }
+#chatSub{ overflow: visible !important; display:flex !important; }
 #chatLastSeenWrap{
-  display: flex;
-  overflow-x: auto;
-  overflow-y: hidden;
-  white-space: nowrap;
-  max-width: 100%;
+  display: flex !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  white-space: nowrap !important;
+  max-width: 180px !important;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -133,18 +155,37 @@ body { background:#0f0a1e; color:#e9edef; height:100vh; overflow:hidden; }
   white-space: nowrap !important;
   overflow: visible !important;
   text-overflow: clip !important;
-  flex-shrink: 0;
+  flex-shrink: 0 !important;
+  font-size: 12px !important;
+  opacity: 0.7 !important;
 }
 
-/* 2b. Green light ON/OFF - controlled by JS */
-#chatAvatarStatus.online{ background:#00e676 !important; border:2px solid #1e1250 !important; display:block; }
-#chatAvatarStatus.offline{ background:#5a4a7a !important; border:2px solid #1e1250 !important; display:block; }
+/* GREEN DOT - REAL ONLINE WHEN ENTER APP */
+#chatAvatarStatus{
+  position: absolute !important;
+  bottom: -2px !important;
+  right: -2px !important;
+  width: 14px !important;
+  height: 14px !important;
+  border: 3px solid #1e1250 !important;
+  border-radius: 50% !important;
+  z-index: 10 !important;
+  display: block !important;
+}
+#chatAvatarStatus.online{
+  background:#00e676 !important;
+  box-shadow: 0 0 0 2px #1e1250, 0 0 8px rgba(0,230,118,0.6) !important;
+}
+#chatAvatarStatus.offline{
+  background:#5a4a7a !important;
+  display: block !important;
+}
 #chatAvatarStatus.hidden{ display:none !important; }
 
-/* 4 & 5. Bubble compress - time + tick one line + small bubble fit content */
-#chatMessages .msg-row{ display:flex; width:100%; }
-#chatMessages .msg-row.out{ justify-content:flex-end; }
-#chatMessages .msg-row.in{ justify-content:flex-start; }
+/* BUBBLE - SMALL FOR Hi, BIG FOR LONG + TIME+TICK ONE LINE */
+#chatMessages .msg-row{ display:flex !important; width:100% !important; }
+#chatMessages .msg-row.out{ justify-content:flex-end !important; }
+#chatMessages .msg-row.in{ justify-content:flex-start !important; }
 
 #chatMessages .bubble{
   width: fit-content !important;
@@ -158,27 +199,25 @@ body { background:#0f0a1e; color:#e9edef; height:100vh; overflow:hidden; }
   font-size: 14.5px;
   line-height: 1.3;
 }
-#chatMessages .bubble .msg-text{
-  display: inline;
-}
+#chatMessages .bubble .msg-text{ display: inline !important; }
 #chatMessages .bubble .msg-time{
   position: static !important;
   display: inline-flex !important;
-  align-items: center;
-  gap: 4px;
+  align-items: center !important;
+  gap: 4px !important;
   font-size: 10px !important;
-  opacity: 0.85;
-  font-weight: 600;
+  opacity: 0.85 !important;
+  font-weight: 600 !important;
   white-space: nowrap !important;
-  float: right;
-  margin-left: 10px;
-  margin-top: 4px;
-  line-height: 1;
-  clear: both;
+  float: right !important;
+  margin-left: 10px !important;
+  margin-top: 4px !important;
+  line-height: 1 !important;
+  clear: both !important;
 }
 
-/* Fix tick colors - not always blue */
-#chatMessages .bubble .ticks{ font-size:11px; display:inline-flex; white-space:nowrap; }
-#chatMessages .bubble .ticks.sent{ color:#9c88b0; }
-#chatMessages .bubble .ticks.delivered{ color:#9c88b0; }
-#chatMessages .bubble .ticks.read{ color:#00e5ff; }
+/* TICKS - 1 grey = data OFF, 2 grey = data ON, 2 light blue = read inside chat */
+#chatMessages .bubble .ticks{ font-size:11px !important; display:inline-flex !important; white-space:nowrap !important; }
+#chatMessages .bubble .ticks.sent{ color:#9c88b0 !important; }
+#chatMessages .bubble .ticks.delivered{ color:#9c88b0 !important; }
+#chatMessages .bubble .ticks.read{ color:#53bdeb !important; } /* WhatsApp light blue */
