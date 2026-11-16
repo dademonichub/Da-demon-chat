@@ -11,6 +11,8 @@ enableIndexedDbPersistence(db).catch((err)=>{ if(err.code !== 'failed-preconditi
 let currentUser = null; let currentChatId = null; let currentChatWith = null; let isSignup = true;
 let selectedLang = localStorage.getItem("ddchat_lang") || "en";
 const userCache = {};
+let presenceUnsub = null;
+let heartbeatInterval = null;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 function showScreen(id){ $$(".screen").forEach(s => s.classList.remove("active")); $("#" + id).classList.add("active"); }
@@ -32,9 +34,57 @@ function renderLanguages(filter=""){ const ul = $("#langList"); ul.innerHTML = "
 renderLanguages(); $("#langSearch").oninput = (e) => renderLanguages(e.target.value);
 $("#langContinue").onclick = () => { localStorage.setItem("ddchat_lang", selectedLang); translateApp(selectedLang); showScreen("auth-screen"); };
 $("#switchAuth").onclick = (e) => { e.preventDefault(); isSignup = !isSignup; $("#authTitle").textContent = isSignup ? "Sign Up" : "Log In"; $("#authBtn").textContent = isSignup ? "Create Account" : "Log In"; $("#switchText").textContent = isSignup ? "Already have an account?" : "New here?"; $("#switchAuth").textContent = isSignup ? "Log In" : "Sign Up"; $("#authName").style.display = isSignup ? "block" : "none"; $("#authUsername").style.display = isSignup ? "block" : "none"; $("#forgotLink").style.display = isSignup ? "none" : "block"; };
-$("#authBtn").onclick = async () => { const email = $("#authEmail").value.trim(); const pass = $("#authPassword").value; if (!email || !pass) return alert("Enter email and password"); try { if (isSignup) { const name = $("#authName").value.trim(); const username = $("#authUsername").value.trim().toLowerCase(); if (!name || !username) return alert("Name & username required"); const cred = await createUserWithEmailAndPassword(auth, email, pass); const ddId = Math.floor(10000000 + Math.random()*90000000).toString(); await setDoc(doc(db, "users", cred.user.uid), { uid: cred.user.uid, name, username, email, lang: selectedLang, about: "Hey there! I'm using DDchat.", avatar: name[0].toUpperCase(), photoURL:"", ddId, phone:"", createdAt: serverTimestamp() }); } else { await signInWithEmailAndPassword(auth, email, pass); } } catch (err) { alert(err.message); } };
+$("#authBtn").onclick = async () => { const email = $("#authEmail").value.trim(); const pass = $("#authPassword").value; if (!email || !pass) return alert("Enter email and password"); try { if (isSignup) { const name = $("#authName").value.trim(); const username = $("#authUsername").value.trim().toLowerCase(); if (!name || !username) return alert("Name & username required"); const cred = await createUserWithEmailAndPassword(auth, email, pass); const ddId = Math.floor(10000000 + Math.random()*90000000).toString(); await setDoc(doc(db, "users", cred.user.uid), { uid: cred.user.uid, name, username, email, lang: selectedLang, about: "Hey there! I'm using DDchat.", avatar: name[0].toUpperCase(), photoURL:"", ddId, phone:"", isOnline:false, lastSeen:serverTimestamp(), currentChatWith:null, createdAt: serverTimestamp() }); } else { await signInWithEmailAndPassword(auth, email, pass); } } catch (err) { alert(err.message); } };
 $("#forgotLink").onclick = (e)=>{ e.preventDefault(); showModal("Reset","Contact support: flatking43@gmail.com"); };
-onAuthStateChanged(auth, async (user) => { authChecked = true; if (user) { currentUser = user; const snap = await getDoc(doc(db, "users", user.uid)); if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; const av = $("#profileAvatar"); if(d.photoURL){ av.innerHTML = `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; av.dataset.full = d.photoURL; } else { av.textContent = d.avatar || d.name[0].toUpperCase(); av.dataset.full = ""; } const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.textContent = d.name; if(!d.ddId){ const ddId = Math.floor(10000000 + Math.random()*90000000).toString(); await updateDoc(doc(db,"users",user.uid),{ddId}); } } showScreen("app"); loadChats(); loadGroups(); loadStatus(); loadCalls(); } else { currentUser=null; if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen"); else showScreen("language-screen"); } });
+
+// ===== PRESENCE SYSTEM - GREEN WHEN ENTER APP, OFFLINE WHEN LEAVE =====
+function startPresence(){
+  if(!currentUser) return;
+  const userRef = doc(db,"users",currentUser.uid);
+  const goOnline = ()=> updateDoc(userRef,{isOnline:true, lastSeen:serverTimestamp(), currentChatWith: currentChatWith || null}).catch(()=>{});
+  const goOffline = ()=> updateDoc(userRef,{isOnline:false, lastSeen:serverTimestamp(), currentChatWith:null}).catch(()=>{});
+  goOnline();
+  if(heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(goOnline, 25000);
+  window.addEventListener('beforeunload', goOffline);
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) goOffline(); else goOnline(); });
+}
+function listenToOtherPresence(otherUid){
+  if(presenceUnsub) presenceUnsub();
+  presenceUnsub = onSnapshot(doc(db,"users",otherUid),(snap)=>{
+    if(!snap.exists()) return;
+    const u = snap.data();
+    userCache[otherUid] = {...userCache[otherUid], ...u};
+    const lastSeenEl = $("#chatLastSeen");
+    const dot = $("#chatAvatarStatus");
+    if(!lastSeenEl || !dot) return;
+    const isAppOnline = u.isOnline === true;
+    const isInsideMyChat = u.currentChatWith === currentUser.uid;
+    dot.style.display="block";
+    if(isInsideMyChat && isAppOnline){
+      lastSeenEl.textContent = "Online";
+      dot.className = "online";
+      markMyMessagesAsRead();
+    } else if(isAppOnline){
+      lastSeenEl.textContent = "Online";
+      dot.className = "online";
+    } else {
+      const last = u.lastSeen?.toDate ? u.lastSeen.toDate() : new Date();
+      lastSeenEl.textContent = `last seen today at ${last.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true})}`;
+      dot.className = "offline";
+    }
+  });
+}
+async function markMyMessagesAsRead(){
+  if(!currentChatId) return;
+  try{
+    const qy = query(collection(db,"chats",currentChatId,"messages"), where("from","==",currentUser.uid));
+    const s = await getDocs(qy);
+    s.forEach(m=>{ if(m.data().status!=="read") updateDoc(doc(db,"chats",currentChatId,"messages",m.id),{status:"read", read:true}).catch(()=>{}); });
+  }catch{}
+}
+
+onAuthStateChanged(auth, async (user) => { authChecked = true; if (user) { currentUser = user; const snap = await getDoc(doc(db, "users", user.uid)); if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; const av = $("#profileAvatar"); if(d.photoURL){ av.innerHTML = `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; av.dataset.full = d.photoURL; } else { av.textContent = d.avatar || d.name[0].toUpperCase(); av.dataset.full = ""; } const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.textContent = d.name; if(!d.ddId){ const ddId = Math.floor(10000000 + Math.random()*90000000).toString(); await updateDoc(doc(db,"users",user.uid),{ddId}); } } showScreen("app"); startPresence(); loadChats(); loadGroups(); loadStatus(); loadCalls(); } else { currentUser=null; if(heartbeatInterval) clearInterval(heartbeatInterval); if(presenceUnsub) presenceUnsub(); if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen"); else showScreen("language-screen"); } });
 $$("#bottomnav button").forEach(btn => { btn.onclick = () => { $$("#bottomnav button").forEach(b => b.classList.remove("active")); btn.classList.add("active"); $$(".page").forEach(p => p.classList.remove("active")); $("#page-" + btn.dataset.page).classList.add("active"); $("#topTitle").textContent = btn.dataset.page === "chats" ? "DDchat" : btn.dataset.page.charAt(0).toUpperCase()+btn.dataset.page.slice(1); if(btn.dataset.page !== "profile"){ const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.style.opacity = "0"; } }; });
 function openFullPhoto(url){ if(!url) return; showModal("Photo",`<div style="position:fixed;inset:0;background:#000;z-index:99999;display:flex;flex-direction:column"><div style="padding:15px;display:flex;align-items:center;background:#111"><button id="photoBackBtn" style="background:#333;border:none;width:42px;height:42px;border-radius:50%;color:white;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer">←</button><span style="color:white;margin-left:15px;font-weight:bold">Profile Photo</span></div><div style="flex:1;display:flex;align-items:center;justify-content:center;background:black;padding:10px"><img src="${url}" style="max-width:100%;max-height:85vh;object-fit:contain;border-radius:8px"/></div></div>`); setTimeout(()=>{ const btn=document.getElementById("photoBackBtn"); if(btn) btn.onclick=()=>$("#modal").classList.add("hidden"); },50); }
 function loadChats(){ if(!currentUser) return; const q = query(collection(db, "chats"), where("members","array-contains",currentUser.uid)); onSnapshot(q, (snap)=>{ const list=$("#chatList"); if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username or DD ID above to start.</li>"; return; } const chatMap = new Map(); snap.forEach(chatDoc=>{ const data=chatDoc.data(); const otherUid=data.members.find(m=>m!==currentUser.uid); if(!otherUid) return; const exist = chatMap.get(otherUid); if(!exist) chatMap.set(otherUid, chatDoc); else { const t1 = exist.data().updated?.toMillis?.()||0; const t2 = data.updated?.toMillis?.()||0; if(t2>t1) chatMap.set(otherUid, chatDoc); } }); list.innerHTML=""; chatMap.forEach((chatDoc, otherUid)=>{ const data=chatDoc.data(); const unread = data.unreadCount?.[currentUser.uid] || 0; const cached = userCache[otherUid]; const name = cached?.name || "DD User"; const letter = cached?.avatar || name[0] || "U"; const photo = cached?.photoURL || ""; const avatarHtml = photo ? `<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></div>` : `<div class="avatar" style="width:48px;height:48px;flex-shrink:0">${letter}</div>`; const li=document.createElement("li"); li.id = "chat_"+otherUid; li.style.display="flex"; li.style.alignItems="center"; li.style.gap="12px"; li.style.padding="12px"; li.style.borderBottom="1px solid rgba(255,255,255,0.06)"; li.style.cursor="pointer"; li.innerHTML=`${avatarHtml}<div style="flex:1;min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</b><small style="color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${escapeHtml(data.lastMsg||"Start chatting")}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`; li.onclick=()=>openChat(chatDoc.id,otherUid, cached?.name||""); list.appendChild(li); }); chatMap.forEach(async (chatDoc, otherUid)=>{ if(userCache[otherUid]) return; try{ const usnap = await getDoc(doc(db,"users",otherUid)); if(usnap.exists()){ const u = usnap.data(); userCache[otherUid]=u; const el = document.getElementById("chat_"+otherUid); if(el){ const photo = u.photoURL||""; const letter = u.avatar||u.name?.[0]?.toUpperCase()||"U"; const avatarHtml = photo ? `<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></div>` : `<div class="avatar" style="width:48px;height:48px;flex-shrink:0">${letter}</div>`; const data = chatDoc.data(); el.innerHTML=`${avatarHtml}<div style="flex:1;min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.name||"DD User")}</b><small style="color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${escapeHtml(data.lastMsg||"Start chatting")}</small></div>${data.unreadCount?.[currentUser.uid]?`<span class="unread-badge">${data.unreadCount[currentUser.uid]}</span>`:''}`; el.onclick=()=>openChat(chatDoc.id,otherUid,u.name); } } }catch{} }); }, (err)=>{ console.log("Chats offline:", err.code); }); }
@@ -42,24 +92,7 @@ $("#chatSearch").oninput = async (e)=>{ const raw = e.target.value.trim(); if(ra
 async function startChat(otherUid){ const members=[currentUser.uid,otherUid].sort(); const chatId=members.join("_"); const ref=doc(db,"chats",chatId); const snap=await getDoc(ref); if(!snap.exists()) await setDoc(ref,{members,lastMsg:"",unreadCount:{[currentUser.uid]:0,[otherUid]:0},updated:serverTimestamp()}); openChat(chatId,otherUid); }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","&quot;":"&#39;"}[c])); }
 
-// ===== FIXED openChat - ONLY THIS PART FIXED FOR 5 COMPLAINTS =====
-function formatTimeWithAMPM(date){
-  if(!date) return "";
-  return date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true});
-}
-function formatLastSeen(date){
-  if(!date) return "last seen today, "+formatTimeWithAMPM(new Date());
-  const d = date instanceof Date ? date : date.toDate ? date.toDate() : new Date();
-  const now = new Date();
-  const diff = Math.floor((now - d)/60000);
-  if(diff < 1) return "Online";
-  if(diff < 60) return `last seen ${diff}m ago, ${formatTimeWithAMPM(d)}`;
-  const isToday = d.toDateString() === now.toDateString();
-  if(isToday) return `last seen today, ${formatTimeWithAMPM(d)}`;
-  return `last seen ${d.toLocaleDateString()}, ${formatTimeWithAMPM(d)}`;
-}
-
-let lastSeenInterval = null;
+function formatTimeWithAMPM(date){ if(!date) return ""; return date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true}); }
 
 function openChat(chatId,otherUid,passedName=""){ 
   currentChatId=chatId; currentChatWith=otherUid; 
@@ -68,8 +101,6 @@ function openChat(chatId,otherUid,passedName=""){
   const chatTitle = $("#chatTitle");
   const chatAvatarImg = $("#chatAvatarImg");
   const chatAboutStatus = $("#chatAboutStatus");
-  const chatLastSeen = $("#chatLastSeen");
-  const chatAvatarStatus = $("#chatAvatarStatus");
   const chatAboutBubble = $("#chatAboutBubble");
   
   chatTitle.textContent=passedName||cached?.name||"Chat";
@@ -78,37 +109,17 @@ function openChat(chatId,otherUid,passedName=""){
     if(cached?.photoURL){ chatAvatarImg.innerHTML=`<img src="${cached.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
     else { chatAvatarImg.textContent = (cached?.avatar||cached?.name?.[0]||"?").toUpperCase(); }
   }
-
-  // FIX 1: About bubble left top corner
   if(chatAboutStatus){
     const aboutText = cached?.about || "Hey there! I'm using DDchat.";
     chatAboutStatus.textContent = aboutText;
     if(chatAboutBubble){ chatAboutBubble.style.display = aboutText ? "block" : "none"; }
   }
 
-  // FIX 2 & 3: Last seen LIVE + green dot ON/OFF
-  if(chatLastSeen && chatAvatarStatus){
-    const isOnline = cached?.isOnline === true;
-    if(isOnline){
-      chatLastSeen.textContent = "Online";
-      chatAvatarStatus.className = "online";
-    } else {
-      chatLastSeen.textContent = formatLastSeen(cached?.lastSeen || new Date());
-      chatAvatarStatus.className = "offline";
-    }
-    // live update every 60s
-    if(lastSeenInterval) clearInterval(lastSeenInterval);
-    lastSeenInterval = setInterval(()=>{
-      const c = userCache[otherUid];
-      if(!c) return;
-      if(c.isOnline){
-        chatLastSeen.textContent = "Online";
-        chatAvatarStatus.className = "online";
-      } else {
-        chatLastSeen.textContent = formatLastSeen(c.lastSeen);
-      }
-    }, 60000);
+  // I enter this individual chat - mark Online for other person
+  if(currentUser){
+    updateDoc(doc(db,"users",currentUser.uid),{currentChatWith: otherUid, isOnline:true, lastSeen:serverTimestamp()}).catch(()=>{});
   }
+  listenToOtherPresence(otherUid);
 
   if(!passedName && !cached){ 
     getDoc(doc(db,"users",otherUid)).then(s=>{ 
@@ -116,19 +127,7 @@ function openChat(chatId,otherUid,passedName=""){
         const u=s.data(); userCache[otherUid]=u; 
         $("#chatTitle").textContent=u.name;
         if(chatAvatarImg){ if(u.photoURL) chatAvatarImg.innerHTML=`<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; else chatAvatarImg.textContent=u.avatar||u.name[0]; }
-        if(chatAboutStatus){ 
-          chatAboutStatus.textContent = u.about || "Available";
-          if(chatAboutBubble) chatAboutBubble.style.display = "block";
-        }
-        if(chatLastSeen){
-          if(u.isOnline){
-            chatLastSeen.textContent="Online";
-            if(chatAvatarStatus) chatAvatarStatus.className="online";
-          } else {
-            chatLastSeen.textContent = formatLastSeen(u.lastSeen);
-            if(chatAvatarStatus) chatAvatarStatus.className="offline";
-          }
-        }
+        if(chatAboutStatus){ chatAboutStatus.textContent = u.about || "Available"; if(chatAboutBubble) chatAboutBubble.style.display="block"; }
       } 
     }).catch(()=>{}); 
   } 
@@ -138,38 +137,52 @@ function openChat(chatId,otherUid,passedName=""){
   onSnapshot(q,(snap)=>{ 
     const box=$("#chatMessages"); box.innerHTML=""; 
     const sep=document.createElement("div"); sep.className="date-sep"; sep.textContent="Today"; box.appendChild(sep);
-    snap.forEach(async m=>{ 
-      const d=m.data(); 
+    const allMsgs=[];
+    snap.forEach(m=> allMsgs.push({id:m.id, ...m.data()}));
+    
+    allMsgs.forEach(d=>{
       const row=document.createElement("div"); row.className="msg-row "+(d.from===currentUser.uid?"out":"in");
       const bubble=document.createElement("div"); bubble.className="bubble "+(d.from===currentUser.uid?"out":"in");
-      // FIX 4 & 5: time with AM/PM + msg-text separate + tick one line + fit-content
       const dateObj = d.ts?.toDate ? d.ts.toDate() : new Date();
       const timeStr = dateObj.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true});
-      let tickClass = "sent";
-      let tickIcon = `<i class="fas fa-check"></i>`;
-      if(d.status === 'delivered'){ tickClass="delivered"; tickIcon=`<i class="fas fa-check-double"></i>`; }
-      if(d.status === 'read' || d.read){ tickClass="read"; tickIcon=`<i class="fas fa-check-double"></i>`; }
+      
+      let tickClass="sent"; let tickIcon=`<i class="fas fa-check"></i>`;
+      if(d.from===currentUser.uid){
+        if(d.status==="read" || d.read){ tickClass="read"; tickIcon=`<i class="fas fa-check-double"></i>`; }
+        else if(d.status==="delivered" || userCache[otherUid]?.isOnline){ tickClass="delivered"; tickIcon=`<i class="fas fa-check-double"></i>`; }
+      }
       const ticks = d.from===currentUser.uid ? `<span class="ticks ${tickClass}">${tickIcon}</span>` : "";
       bubble.innerHTML=`<span class="msg-text">${escapeHtml(d.text)}</span><span class="msg-time">${timeStr} ${ticks}</span>`;
-      bubble.dataset.orig=d.text;
       row.appendChild(bubble);
       box.appendChild(row);
-      if(d.from!==currentUser.uid){ 
-        const key = myLang+"::"+d.text.trim(); 
-        if(!transCache[key]){ 
-          try{ const t = await googleTranslate(d.text, "auto", myLang); if(t && t.toLowerCase()!==d.text.toLowerCase()){ transCache[key]=t; localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); } }catch{} 
-        } 
-      } 
+
+      // auto read when I am inside chat and receive
+      if(d.from!==currentUser.uid && currentChatWith===d.from){
+        if(d.status!=="read") updateDoc(doc(db,"chats",currentChatId,"messages",d.id),{status:"read", read:true}).catch(()=>{});
+      }
     }); 
     setTimeout(()=>{ box.scrollTop=box.scrollHeight; }, 200); 
   }); 
 }
 
 $("#sendBtn").onclick=sendMessage; $("#messageInput").addEventListener("keypress",(e)=>{ if(e.key==="Enter") sendMessage(); });
-async function sendMessage(){ const text=$("#messageInput").value.trim(); if(!text||!currentChatId) return; $("#messageInput").value=""; await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text,ts:serverTimestamp(), status:'sent'}); await updateDoc(doc(db,"chats",currentChatId),{lastMsg:text,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)}); }
-$("#chatBack").onclick=()=>{ if(lastSeenInterval) clearInterval(lastSeenInterval); showScreen("app"); };
+async function sendMessage(){
+  const text=$("#messageInput").value.trim(); if(!text||!currentChatId) return;
+  $("#messageInput").value="";
+  const otherOnline = userCache[currentChatWith]?.isOnline;
+  const initialStatus = otherOnline ? "delivered" : "sent";
+  await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text,ts:serverTimestamp(), status:initialStatus});
+  await updateDoc(doc(db,"chats",currentChatId),{lastMsg:text,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+}
+$("#chatBack").onclick=()=>{
+  if(currentUser){
+    updateDoc(doc(db,"users",currentUser.uid),{currentChatWith:null, lastSeen:serverTimestamp(), isOnline:true}).catch(()=>{});
+  }
+  currentChatWith=null;
+  if(presenceUnsub) presenceUnsub();
+  showScreen("app");
+};
 
-// ===== PLUS + MIC + STICKER + CALLS =====
 const plusChat = document.getElementById('plusChat');
 const fileInput = document.getElementById('fileInput');
 const micBtn = document.getElementById('micBtn');
@@ -180,7 +193,7 @@ const chatVoiceCall = document.getElementById('chatVoiceCall');
 plusChat?.addEventListener('click', ()=> fileInput?.click());
 fileInput?.addEventListener('change', async (e)=>{
   const f=e.target.files[0]; if(!f||!currentChatId) return;
-  await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,ts:serverTimestamp()});
+  await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,ts:serverTimestamp(), status:"sent"});
   await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
 });
 let recState=null;
