@@ -7,13 +7,11 @@ import {
   getFirestore, collection, addDoc, onSnapshot, query, where,
   orderBy, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment
 } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app);
 
 let currentUser = null;
 let currentChatId = null;
@@ -272,8 +270,6 @@ $$("#bottomnav button").forEach(btn => {
   };
 });
 
-// === FIX 2 FUNCTIONS FOR YOUR 2 ISSUES ===
-// ISSUE 1 FIX: BIG PHOTO VIEW WITH BACK ARROW
 function openFullPhoto(url){
   if(!url) return;
   showModal("Photo",`
@@ -293,7 +289,6 @@ function openFullPhoto(url){
   },50);
 }
 
-// ISSUE 2 FIX: SHOW REAL NAME AND REAL PHOTO NOT "Chat"
 function loadChats(){
   if(!currentUser) return;
   const q = query(collection(db, "chats"), where("members","array-contains",currentUser.uid));
@@ -327,7 +322,6 @@ function loadChats(){
   });
 }
 
-// === FIXED: DD ID + USERNAME SEARCH ===
 $("#chatSearch").oninput = async (e)=>{
   const raw = e.target.value.trim();
   if(raw.length<1){ loadChats(); return; }
@@ -355,14 +349,12 @@ function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<"
 function openChat(chatId,otherUid,passedName=""){
   currentChatId=chatId; currentChatWith=otherUid; showScreen("chat-view");
   $("#chatTitle").textContent=passedName||"Chat";
-  // ALSO FETCH REAL NAME FOR CHAT HEADER IF NOT PASSED
   if(!passedName){
     getDoc(doc(db,"users",otherUid)).then(s=>{
       if(s.exists()) $("#chatTitle").textContent=s.data().name;
     }).catch(()=>{});
   }
   updateDoc(doc(db,"chats",chatId),{[ `unreadCount.${currentUser.uid}`]:0}).catch(()=>{});
-  const myLang = localStorage.getItem("ddchat_lang") || "en";
   const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts"));
   onSnapshot(q,(snap)=>{
     const box=$("#chatMessages"); box.innerHTML="";
@@ -423,7 +415,6 @@ function loadGroups(){
 
 function loadCalls(){ $("#callList").innerHTML="<li style='padding:15px;color:#8696a0'>No calls yet. Voice/video calling integration coming (use WebRTC).</li>"; }
 
-// ===== PROFILE TOP BAR + ALL FIXES =====
 document.addEventListener("DOMContentLoaded", ()=>{
   const scrollArea = document.getElementById('profileScrollArea');
   const stickyName = document.getElementById('profileStickyName');
@@ -440,18 +431,12 @@ document.addEventListener("DOMContentLoaded", ()=>{
   }
 });
 
-// SAFE GLOBAL HANDLERS FOR NEW TOP ICONS
 document.addEventListener("click", async (e)=>{
-
-  // CLICK PROFILE AVATAR TO VIEW BIG - ISSUE 1
   if(e.target.closest("#profileAvatar")){
     const av=$("#profileAvatar");
-    const img=av.querySelector("img");
-    const url=av.dataset.full || (img ? img.src : "");
+    const url=av.dataset.full || av.querySelector("img")?.src || "";
     if(url) openFullPhoto(url);
   }
-
-  // FIX 1: SEARCH WITH SUGGESTION SURFACE
   if(e.target.closest("#topSearchBtn")){
     showModal("Search Settings",`
       <input id="settingsSearchInput" placeholder="Search settings" style="width:100%;padding:12px;border-radius:10px;border:1px solid #444;background:#0f0a1e;color:white;margin-bottom:10px"/>
@@ -466,8 +451,6 @@ document.addEventListener("click", async (e)=>{
     };
     setTimeout(()=>{ const inp=document.getElementById("settingsSearchInput"); if(inp){ inp.focus(); render(""); inp.oninput=(ev)=>render(ev.target.value); } },100);
   }
-
-  // FIX 2,3,4: QR WITH RETURN + UPLOAD ACTION + ADD FRIEND
   if(e.target.closest("#topQrBtn")){
     if(!currentUser) return alert("Login first");
     let snap=await getDoc(doc(db,"users",currentUser.uid));
@@ -559,8 +542,6 @@ document.addEventListener("click", async (e)=>{
       };
     },100);
   }
-
-  // FIX FOR ANY SIZE PHOTO + BIG VIEW - ISSUE 1
   if(e.target.closest("#topEditBtn")){
     if(!currentUser) return;
     let snap=await getDoc(doc(db,"users",currentUser.uid));
@@ -581,21 +562,29 @@ document.addEventListener("click", async (e)=>{
       </div>
     `);
     setTimeout(()=>{
-      let selectedFile = null;
-      let previewUrl = d.photoURL || "";
-      
-      document.getElementById("editAvatarPreview").onclick=()=>{
-        if(previewUrl) openFullPhoto(previewUrl);
-      };
-      
+      let finalPhoto = d.photoURL || "";
+      document.getElementById("editAvatarPreview").onclick=()=>{ if(finalPhoto) openFullPhoto(finalPhoto); };
       document.getElementById("photoInput").onchange=(ev)=>{
         const file=ev.target.files[0]; if(!file) return;
-        selectedFile=file;
-        previewUrl=URL.createObjectURL(file);
-        document.getElementById("editAvatarPreview").innerHTML=`<img src="${previewUrl}" style="width:100%;height:100%;object-fit:cover">`;
-        document.getElementById("editStatus").textContent=`Selected: ${file.name} (${(file.size/1024/1024).toFixed(2)}MB) - Any size OK`;
+        document.getElementById("editStatus").textContent="Compressing any size...";
+        const reader=new FileReader();
+        reader.onload=(e)=>{
+          const img=new Image();
+          img.onload=()=>{
+            const canvas=document.createElement("canvas");
+            let w=img.width, h=img.height;
+            const max=800;
+            if(w>h){ if(w>max){ h*=max/w; w=max; } } else { if(h>max){ w*=max/h; h=max; } }
+            canvas.width=w; canvas.height=h;
+            canvas.getContext("2d").drawImage(img,0,0,w,h);
+            finalPhoto=canvas.toDataURL("image/jpeg",0.7);
+            document.getElementById("editAvatarPreview").innerHTML=`<img src="${finalPhoto}" style="width:100%;height:100%;object-fit:cover">`;
+            document.getElementById("editStatus").textContent=`Ready! Original ${(file.size/1024/1024).toFixed(2)}MB compressed ✓`;
+          };
+          img.src=e.target.result;
+        };
+        reader.readAsDataURL(file);
       };
-      
       document.getElementById("saveProfileNew").onclick=async()=>{
         const name=document.getElementById("editName").value.trim();
         const about=document.getElementById("editAbout").value.trim();
@@ -603,20 +592,10 @@ document.addEventListener("click", async (e)=>{
         if(!name) return alert("Name required");
         document.getElementById("editStatus").textContent="Saving...";
         try{
-          let photoURL=d.photoURL||"";
-          if(selectedFile){
-            document.getElementById("editStatus").textContent="Uploading any size photo...";
-            const storageRef=ref(storage, `profiles/${currentUser.uid}/${Date.now()}_${selectedFile.name}`);
-            await uploadBytes(storageRef, selectedFile);
-            photoURL=await getDownloadURL(storageRef);
-          }
-          await updateDoc(doc(db,"users",currentUser.uid),{name, about, phone, avatar:name[0].toUpperCase(), photoURL});
+          await updateDoc(doc(db,"users",currentUser.uid),{name, about, phone, avatar:name[0].toUpperCase(), photoURL:finalPhoto});
           document.getElementById("profileName").textContent=name;
           const av=document.getElementById("profileAvatar");
-          if(photoURL){ 
-            av.innerHTML=`<img src="${photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
-            av.dataset.full=photoURL;
-          }
+          if(finalPhoto){ av.innerHTML=`<img src="${finalPhoto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; av.dataset.full=finalPhoto; }
           const sticky=document.getElementById("profileStickyName"); if(sticky) sticky.textContent=name;
           document.getElementById("editStatus").textContent="Saved! ✓";
           setTimeout(()=>document.getElementById("modal").classList.add("hidden"),800);
