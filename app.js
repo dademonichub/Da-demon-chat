@@ -219,7 +219,7 @@ $("#authBtn").onclick = async () => {
       if (!name || !username) return alert("Name & username required");
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       const ddId = Math.floor(10000000 + Math.random()*90000000).toString();
-      await setDoc(doc(db, "users", cred.user.uid), { uid: cred.user.uid, name, username, email, lang: selectedLang, about: "Hey there! I'm using DDchat.", avatar: name[0].toUpperCase(), ddId, phone:"", createdAt: serverTimestamp() });
+      await setDoc(doc(db, "users", cred.user.uid), { uid: cred.user.uid, name, username, email, lang: selectedLang, about: "Hey there! I'm using DDchat.", avatar: name[0].toUpperCase(), photoURL:"", ddId, phone:"", createdAt: serverTimestamp() });
     } else { await signInWithEmailAndPassword(auth, email, pass); }
   } catch (err) { alert(err.message); }
 };
@@ -235,7 +235,9 @@ onAuthStateChanged(auth, async (user) => {
       const d = snap.data();
       $("#profileName").textContent = d.name;
       $("#profileUsername").textContent = "@"+d.username;
-      $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase();
+      const av = $("#profileAvatar");
+      if(d.photoURL){ av.innerHTML = `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
+      else { av.textContent = d.avatar || d.name[0].toUpperCase(); }
       const sticky = document.getElementById("profileStickyName");
       if(sticky) sticky.textContent = d.name;
       if(!d.ddId){
@@ -256,7 +258,6 @@ $$("#bottomnav button").forEach(btn => {
     $$("#bottomnav button").forEach(b => b.classList.remove("active")); btn.classList.add("active");
     $$(".page").forEach(p => p.classList.remove("active")); $("#page-" + btn.dataset.page).classList.add("active");
     $("#topTitle").textContent = btn.dataset.page === "chats" ? "DDchat" : btn.dataset.page.charAt(0).toUpperCase()+btn.dataset.page.slice(1);
-    // Reset profile scroll name when switching
     if(btn.dataset.page !== "profile"){
       const sticky = document.getElementById("profileStickyName");
       if(sticky) sticky.style.opacity = "0";
@@ -269,7 +270,7 @@ function loadChats(){
   const q = query(collection(db, "chats"), where("members","array-contains",currentUser.uid));
   onSnapshot(q,(snap)=>{
     const list=$("#chatList"); list.innerHTML="";
-    if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username above to start.</li>"; return; }
+    if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username or DD ID above to start.</li>"; return; }
     snap.forEach(d=>{
       const data=d.data();
       const unread = data.unreadCount?.[currentUser.uid] || 0;
@@ -280,12 +281,21 @@ function loadChats(){
   });
 }
 
+// === FIXED: DD ID + USERNAME SEARCH ===
 $("#chatSearch").oninput = async (e)=>{
-  const term=e.target.value.trim().toLowerCase(); if(term.length<2){ loadChats(); return; }
-  const q1=query(collection(db,"users"), where("username","==",term));
-  const snap=await getDocs(q1); const list=$("#chatList"); list.innerHTML="";
-  snap.forEach(d=>{ const u=d.data(); if(u.uid===currentUser.uid) return; const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${u.name[0]}</div><div><b>${u.name}</b><br><small>@${u.username}</small></div>`; li.onclick=()=>startChat(u.uid); list.appendChild(li); });
-  if(list.innerHTML==="") list.innerHTML="<li style='padding:15px'>No user found</li>";
+  const raw = e.target.value.trim();
+  if(raw.length<1){ loadChats(); return; }
+  const list=$("#chatList");
+  list.innerHTML="<li style='padding:15px'>Searching...</li>";
+  let found = [];
+  const low = raw.toLowerCase();
+  try{ const q1=query(collection(db,"users"), where("username","==",low)); const s1=await getDocs(q1); s1.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid) found.push(u); }); }catch{}
+  try{ const q2=query(collection(db,"users"), where("ddId","==",raw)); const s2=await getDocs(q2); s2.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid && !found.find(f=>f.uid===u.uid)) found.push(u); }); }catch{}
+  const clean = raw.replace("DD-","").replace("DD","").trim();
+  if(clean!==raw){ try{ const q3=query(collection(db,"users"), where("ddId","==",clean)); const s3=await getDocs(q3); s3.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid && !found.find(f=>f.uid===u.uid)) found.push(u); }); }catch{} }
+  list.innerHTML="";
+  if(found.length===0){ list.innerHTML=`<li style='padding:15px'>No user found for "${escapeHtml(raw)}"</li>`; return; }
+  found.forEach(u=>{ const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${u.avatar||u.name[0]}</div><div><b>${escapeHtml(u.name)}</b><br><small>@${escapeHtml(u.username)} - DD ID: ${u.ddId}</small></div>`; li.onclick=()=>startChat(u.uid); list.appendChild(li); });
 };
 
 async function startChat(otherUid){
@@ -312,25 +322,6 @@ function openChat(chatId,otherUid){
       div.dataset.orig=d.text;
       div.innerHTML=escapeHtml(d.text);
       box.appendChild(div);
-      if(!d.text.trim() || myLang==="en") return;
-      const cacheKey=myLang+"::msg::"+d.text.trim();
-      if(div.querySelector("small")) return;
-      const cached=transCache[cacheKey];
-      if(cached){
-        div.innerHTML=escapeHtml(d.text)+`<br><small style="opacity:0.7;display:block;margin-top:3px">→ ${escapeHtml(cached)}</small>`;
-      }else{
-        if(div.dataset.fetching) return;
-        div.dataset.fetching="1";
-        googleTranslate(d.text,"auto",myLang).then(t=>{
-          if(!t || t.toLowerCase()===d.text.toLowerCase()) return;
-          transCache[cacheKey]=t;
-          localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache));
-          const el=document.getElementById("msg_"+m.id);
-          if(el && !el.querySelector("small")){
-            el.innerHTML=escapeHtml(el.dataset.orig)+`<br><small style="opacity:0.7;display:block;margin-top:3px">→ ${escapeHtml(t)}</small>`;
-          }
-        });
-      }
     });
     box.scrollTop=box.scrollHeight;
   });
@@ -380,56 +371,55 @@ function loadGroups(){
 
 function loadCalls(){ $("#callList").innerHTML="<li style='padding:15px;color:#8696a0'>No calls yet. Voice/video calling integration coming (use WebRTC).</li>"; }
 
-// ===== PROFILE TOP BAR - WHATSAPP STYLE =====
+// ===== PROFILE TOP BAR + ALL FIXES =====
 document.addEventListener("DOMContentLoaded", ()=>{
   const scrollArea = document.getElementById('profileScrollArea');
   const stickyName = document.getElementById('profileStickyName');
   if(scrollArea && stickyName){
     scrollArea.addEventListener('scroll', ()=>{
-      stickyName.style.opacity = scrollArea.scrollTop > 60 ? '1' : '0';
       if(scrollArea.scrollTop > 60){
+        stickyName.style.opacity = '1';
         const nameEl = document.getElementById('profileName');
         if(nameEl) stickyName.textContent = nameEl.textContent.replace('▼','').trim();
+      } else {
+        stickyName.style.opacity = '0';
       }
     });
   }
 });
 
-// SAFE GLOBAL HANDLERS FOR NEW TOP ICONS
+// SAFE GLOBAL HANDLERS FOR NEW TOP ICONS - ALL 6 ISSUES FIXED
 document.addEventListener("click", async (e)=>{
+
+  // FIX 1: SEARCH WITH SUGGESTION SURFACE
   if(e.target.closest("#topSearchBtn")){
-    showModal("Search Settings",`<input id="settingsSearchInput" placeholder="Search settings" style="width:100%;padding:12px;border-radius:10px;border:1px solid #ddd;margin-top:8px"/>`);
-    setTimeout(()=>{
-      const inp=document.getElementById("settingsSearchInput");
-      if(inp){
-        inp.focus();
-        inp.oninput=(ev)=>{
-          const term=ev.target.value.toLowerCase();
-          document.querySelectorAll(".settings-list li").forEach(li=>{
-            li.style.display= li.textContent.toLowerCase().includes(term) ? "" : "none";
-          });
-        };
-      }
-    },80);
+    showModal("Search Settings",`
+      <input id="settingsSearchInput" placeholder="Search settings" style="width:100%;padding:12px;border-radius:10px;border:1px solid #444;background:#0f0a1e;color:white;margin-bottom:10px"/>
+      <ul id="searchSuggestionList" class="list" style="max-height:300px;overflow-y:auto;background:#1e1250;border-radius:8px"></ul>
+    `);
+    const all=[{name:"Account",key:"account"},{name:"Privacy",key:"privacy"},{name:"Chats",key:"chats"},{name:"Appearance",key:"appearance"},{name:"Notifications",key:"notifications"},{name:"Storage and Data",key:"storage"},{name:"Help & Feedback",key:"help"},{name:"Invite Contacts",key:"invite"}];
+    const render=(term="")=>{
+      const list=document.getElementById("searchSuggestionList"); if(!list) return;
+      const f=all.filter(s=>s.name.toLowerCase().includes(term.toLowerCase()));
+      list.innerHTML=f.map(s=>`<li data-key="${s.key}" style="padding:12px;border-bottom:1px solid #2a1a6a;cursor:pointer;display:flex;justify-content:space-between"><span>${s.name}</span><i class="fas fa-chevron-right" style="opacity:0.3"></i></li>`).join('')||`<li style="padding:12px;opacity:0.5">No result</li>`;
+      list.querySelectorAll("li").forEach(li=>{ li.onclick=()=>{ document.getElementById("modal").classList.add("hidden"); document.querySelector(`.settings-list li[data-setting="${li.dataset.key}"]`)?.click(); }; });
+    };
+    setTimeout(()=>{ const inp=document.getElementById("settingsSearchInput"); if(inp){ inp.focus(); render(""); inp.oninput=(ev)=>render(ev.target.value); } },100);
   }
 
+  // FIX 2,3,4: QR WITH RETURN + UPLOAD ACTION + ADD FRIEND
   if(e.target.closest("#topQrBtn")){
     if(!currentUser) return alert("Login first");
     let snap=await getDoc(doc(db,"users",currentUser.uid));
     let d=snap.data();
-    if(!d.ddId){
-      const ddId=Math.floor(10000000+Math.random()*90000000).toString();
-      await updateDoc(doc(db,"users",currentUser.uid),{ddId});
-      d.ddId=ddId;
-    }
+    if(!d.ddId){ const ddId=Math.floor(10000000+Math.random()*90000000).toString(); await updateDoc(doc(db,"users",currentUser.uid),{ddId}); d.ddId=ddId; }
     const qrData = `DDCHAT:${d.uid}:${d.ddId}`;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}`;
-
     showModal("QR Code",`
-      <div style="position:relative">
+      <div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <button class="btn" id="scanLeftBtn" style="padding:8px 12px">📷 Scan</button>
-          <button class="btn" id="shareQrTopRight" style="padding:8px 12px">Share</button>
+          <div style="display:flex;gap:6px"><button class="btn" id="shareQrTopRight" style="padding:8px 12px">Share</button><button class="btn" id="closeQrBtn" style="padding:8px 12px;background:#444">Close</button></div>
         </div>
         <div style="text-align:center">
           <img id="qrImg" src="${qrUrl}" style="width:220px;height:220px;border-radius:12px;border:1px solid #eee"/>
@@ -441,72 +431,64 @@ document.addEventListener("click", async (e)=>{
           <button class="btn" id="uploadQrBtn" style="flex:1">Upload QR Image</button>
           <button class="btn" id="resetQrBtn" style="flex:1;background:#ff3b30;color:#fff">Reset Code</button>
         </div>
-        <div id="qrResult" style="margin-top:10px;font-size:14px"></div>
-        <video id="qrVideo" style="width:100%;display:none;border-radius:12px;margin-top:10px" autoplay playsinline></video>
-        <canvas id="qrCanvas" style="display:none"></canvas>
+        <div id="qrResult" style="margin-top:10px;padding:10px;background:#1e1250;border-radius:8px;min-height:30px">Ready to scan...</div>
+        <div id="qrCameraWrap" style="display:none;margin-top:10px"><video id="qrVideo" style="width:100%;border-radius:12px" autoplay playsinline></video><button class="btn" id="stopCameraBtn" style="width:100%;margin-top:8px;background:#444">Return / Stop Camera</button></div>
       </div>
     `);
-
-    setTimeout(async ()=>{
+    setTimeout(()=>{
+      let streamRef=null;
+      document.getElementById("closeQrBtn").onclick=()=>document.getElementById("modal").classList.add("hidden");
       document.getElementById("shareQrTopRight").onclick=async()=>{
-        const shareData={title:"My DDchat QR", text:`My DD ID: ${d.ddId}`, url: qrUrl};
-        if(navigator.share){
-          try{ await navigator.share(shareData); }catch{}
-        }else{
-          await navigator.clipboard.writeText(qrData);
-          alert("QR data copied: "+qrData);
-        }
+        if(navigator.share){ try{ await navigator.share({title:"My DDchat QR", text:`My DD ID: ${d.ddId}`}); }catch{} }
+        else{ await navigator.clipboard.writeText(qrData); alert("QR data copied: "+qrData); }
       };
-
       async function handleScanned(text){
-        document.getElementById("qrResult").innerHTML="Scanned: "+escapeHtml(text);
+        const el=document.getElementById("qrResult");
+        el.innerHTML="Scanned: "+escapeHtml(text)+"<br>Processing...";
         if(text.includes("DDCHAT:")){
-          const parts=text.split(":");
-          const uid=parts[1];
+          const uid=text.split(":")[1];
           if(uid && uid!==currentUser.uid){
             const usnap=await getDoc(doc(db,"users",uid));
             if(usnap.exists()){
               const u=usnap.data();
-              document.getElementById("qrResult").innerHTML+=`<br><b>Found: ${u.name} (@${u.username})</b><br><button class="btn" id="goToAccount">Go to Account - Start Chat</button>`;
+              el.innerHTML+=`<br><b>Found: ${u.name} (@${u.username})</b><br><button class="btn" id="goToAccount" style="margin-top:8px;width:100%">Go to Account - Start Chat</button>`;
               document.getElementById("goToAccount").onclick=()=>{ document.getElementById("modal").classList.add("hidden"); startChat(uid); };
-            }
-          }
-        }
+            } else { el.innerHTML+="<br>User not found"; }
+          } else { el.innerHTML+="<br>That's your own QR"; }
+        } else { el.innerHTML+="<br>Invalid QR - Use DDchat QR"; }
       }
-
-      document.getElementById("uploadQrBtn").onclick=()=> document.getElementById("qrUploadInput").click();
+      document.getElementById("uploadQrBtn").onclick=()=>document.getElementById("qrUploadInput").click();
       document.getElementById("qrUploadInput").onchange=async(ev)=>{
         const file=ev.target.files[0]; if(!file) return;
+        document.getElementById("qrResult").textContent="Reading QR image...";
         const fd=new FormData(); fd.append("file",file);
         try{
           const res=await fetch("https://api.qrserver.com/v1/read-qr-code/",{method:"POST",body:fd});
           const json=await res.json();
           const decoded=json[0]?.symbol[0]?.data;
           if(decoded) handleScanned(decoded);
-          else document.getElementById("qrResult").textContent="Could not read QR";
-        }catch{ document.getElementById("qrResult").textContent="Scan failed"; }
+          else document.getElementById("qrResult").textContent="Could not read QR - try clearer image";
+        }catch{ document.getElementById("qrResult").textContent="Upload failed - check internet"; }
       };
-
       document.getElementById("scanLeftBtn").onclick=async()=>{
-        const video=document.getElementById("qrVideo");
-        video.style.display="block";
+        const wrap=document.getElementById("qrCameraWrap"); const video=document.getElementById("qrVideo");
+        wrap.style.display="block";
         try{
           const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
-          video.srcObject=stream;
+          streamRef=stream; video.srcObject=stream;
+          document.getElementById("qrResult").textContent="Camera on - point at QR";
           if("BarcodeDetector" in window){
             const detector=new BarcodeDetector({formats:["qr_code"]});
             const interval=setInterval(async()=>{
               try{
                 const codes=await detector.detect(video);
-                if(codes.length){ clearInterval(interval); stream.getTracks().forEach(t=>t.stop()); video.style.display="none"; handleScanned(codes[0].rawValue); }
+                if(codes.length){ clearInterval(interval); if(streamRef) streamRef.getTracks().forEach(t=>t.stop()); wrap.style.display="none"; handleScanned(codes[0].rawValue); }
               }catch{}
             },500);
-          }else{
-            document.getElementById("qrResult").textContent="Camera opened - use Upload if not detected.";
           }
-        }catch(err){ document.getElementById("qrResult").textContent="Camera permission denied"; }
+        }catch{ document.getElementById("qrResult").textContent="Camera permission denied"; }
       };
-
+      document.getElementById("stopCameraBtn").onclick=()=>{ if(streamRef) streamRef.getTracks().forEach(t=>t.stop()); document.getElementById("qrCameraWrap").style.display="none"; document.getElementById("qrResult").textContent="Returned"; };
       document.getElementById("resetQrBtn").onclick=async()=>{
         const newDdId=Math.floor(10000000+Math.random()*90000000).toString();
         await updateDoc(doc(db,"users",currentUser.uid),{ddId:newDdId});
@@ -518,52 +500,52 @@ document.addEventListener("click", async (e)=>{
     },100);
   }
 
+  // FIX 5: PROFILE PHOTO APPEAR AND SAVE
   if(e.target.closest("#topEditBtn")){
     if(!currentUser) return;
     let snap=await getDoc(doc(db,"users",currentUser.uid));
     let d=snap.data();
-    if(!d.ddId){
-      const ddId=Math.floor(10000000+Math.random()*90000000).toString();
-      await updateDoc(doc(db,"users",currentUser.uid),{ddId});
-      d.ddId=ddId;
-    }
+    if(!d.ddId){ const ddId=Math.floor(10000000+Math.random()*90000000).toString(); await updateDoc(doc(db,"users",currentUser.uid),{ddId}); d.ddId=ddId; }
     showModal("Edit Profile",`
       <div style="display:flex;flex-direction:column;gap:10px">
-        <div style="text-align:center"><div class="avatar" id="editAvatarPreview" style="width:70px;height:70px;font-size:30px;margin:auto">${d.avatar || d.name[0]}</div>
-        <input type="file" id="photoInput" accept="image/*" style="margin-top:8px"/></div>
-        <label>Name</label>
-        <input id="editName" value="${escapeHtml(d.name)}" placeholder="Name" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd"/>
-        <label>About</label>
-        <textarea id="editAbout" placeholder="About" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd">${escapeHtml(d.about||"")}</textarea>
-        <label>Phone</label>
-        <input id="editPhone" value="${escapeHtml(d.phone||"")}" placeholder="Phone" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd"/>
-        <label>Email area</label>
-        <input id="editEmailArea" value="${escapeHtml(d.email||"")}" placeholder="Email" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd" disabled/>
-        <small style="color:#8696a0">Email cannot be changed - it's your login</small>
-        <label>DD ID</label>
-        <input id="editDdId" value="${d.ddId}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd;background:#f5f5f5" disabled/>
-        <small style="color:#8696a0">DD ID is random numbers only - system generated</small>
-        <button class="btn" id="saveProfileNew" style="margin-top:8px">Save Changes</button>
+        <div style="text-align:center"><div class="avatar" id="editAvatarPreview" style="width:70px;height:70px;font-size:30px;margin:auto;overflow:hidden;background:#5E35B1;color:white;display:flex;align-items:center;justify-content:center;border-radius:50%">${d.photoURL?`<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover">`:(d.avatar||d.name[0])}</div>
+        <input type="file" id="photoInput" accept="image/*" style="margin-top:8px"/><br><small style="opacity:0.6">Photo will appear instantly</small></div>
+        <label>Name</label><input id="editName" value="${escapeHtml(d.name)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd"/>
+        <label>About</label><textarea id="editAbout" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd">${escapeHtml(d.about||"")}</textarea>
+        <label>Phone</label><input id="editPhone" value="${escapeHtml(d.phone||"")}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd"/>
+        <label>Email</label><input value="${escapeHtml(d.email||"")}" disabled style="width:100%;padding:10px;border-radius:8px;background:#f5f5f5"/>
+        <label>DD ID</label><input value="${d.ddId}" disabled style="width:100%;padding:10px;border-radius:8px;background:#f5f5f5"/>
+        <button class="btn" id="saveProfileNew" style="margin-top:8px">Save Changes</button><div id="editStatus" style="text-align:center;margin-top:8px"></div>
       </div>
     `);
     setTimeout(()=>{
+      let newPhotoBase64 = d.photoURL || null;
       let newAvatarLetter = d.avatar;
       document.getElementById("photoInput").onchange=(ev)=>{
         const file=ev.target.files[0]; if(!file) return;
+        const reader=new FileReader();
+        reader.onload=(e)=>{ newPhotoBase64=e.target.result; document.getElementById("editAvatarPreview").innerHTML=`<img src="${newPhotoBase64}" style="width:100%;height:100%;object-fit:cover">`; };
+        reader.readAsDataURL(file);
         newAvatarLetter=file.name[0].toUpperCase();
-        document.getElementById("editAvatarPreview").textContent=newAvatarLetter;
       };
       document.getElementById("saveProfileNew").onclick=async()=>{
         const name=document.getElementById("editName").value.trim();
         const about=document.getElementById("editAbout").value.trim();
         const phone=document.getElementById("editPhone").value.trim();
         if(!name) return alert("Name required");
-        await updateDoc(doc(db,"users",currentUser.uid),{name, about, phone, avatar:newAvatarLetter || name[0].toUpperCase()});
-        document.getElementById("profileName").textContent=name;
-        document.getElementById("profileAvatar").textContent=newAvatarLetter || name[0].toUpperCase();
-        const sticky = document.getElementById("profileStickyName");
-        if(sticky) sticky.textContent=name;
-        document.getElementById("modal").classList.add("hidden");
+        document.getElementById("editStatus").textContent="Saving...";
+        try{
+          const updateData={name, about, phone, avatar:newAvatarLetter||name[0].toUpperCase()};
+          if(newPhotoBase64) updateData.photoURL=newPhotoBase64;
+          await updateDoc(doc(db,"users",currentUser.uid),updateData);
+          document.getElementById("profileName").textContent=name;
+          const av=document.getElementById("profileAvatar");
+          if(newPhotoBase64){ av.innerHTML=`<img src="${newPhotoBase64}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
+          else { av.textContent=newAvatarLetter||name[0].toUpperCase(); }
+          const sticky=document.getElementById("profileStickyName"); if(sticky) sticky.textContent=name;
+          document.getElementById("editStatus").textContent="Saved!";
+          setTimeout(()=>document.getElementById("modal").classList.add("hidden"),800);
+        }catch(err){ document.getElementById("editStatus").textContent="Save failed: "+err.message; }
       };
     },100);
   }
@@ -573,10 +555,7 @@ $$(".settings-list li").forEach(li=>{
   li.onclick=()=>{
     const s=li.dataset.setting;
     if(s==="logout"){ signOut(auth); return; }
-    if(s==="account"){
-      document.getElementById("topEditBtn")?.click();
-      return;
-    }
+    if(s==="account"){ document.getElementById("topEditBtn")?.click(); return; }
     showModal(li.textContent.trim(),"<p>"+s+" settings coming soon - built.</p>");
   };
 });
