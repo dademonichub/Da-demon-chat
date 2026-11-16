@@ -5,7 +5,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import {
   getFirestore, collection, addDoc, onSnapshot, query, where,
-  orderBy, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment
+  orderBy, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment,
+  enableIndexedDbPersistence
 } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -13,11 +14,16 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+enableIndexedDbPersistence(db).catch((err)=>{
+  if(err.code !== 'failed-precondition') console.log("Offline cache:", err.code);
+});
+
 let currentUser = null;
 let currentChatId = null;
 let currentChatWith = null;
 let isSignup = true;
 let selectedLang = localStorage.getItem("ddchat_lang") || "en";
+const userCache = {};
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
@@ -125,8 +131,11 @@ const LANGUAGES = [
 const BAD_FIX = { "Client en Compte":"Compte", "Compte du client":"Compte" };
 const FORCE_FIX = { "QR Code": { "th":"คิวอาร์โค้ด", "zh":"二维码", "fr":"Code QR", "es":"Código QR", "de":"QR-Code" } };
 let transCache = JSON.parse(localStorage.getItem("ddchat_trans_v3") || "{}");
+
+// FIX 1: ALLOW AUTO DETECT
 async function googleTranslate(text, from, to){
-  if(!text || from===to) return text;
+  if(!text) return text;
+  if(from===to && from!=="auto") return text;
   try{
     const url=`https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`;
     const r=await fetch(url); const j=await r.json();
@@ -292,33 +301,59 @@ function openFullPhoto(url){
 function loadChats(){
   if(!currentUser) return;
   const q = query(collection(db, "chats"), where("members","array-contains",currentUser.uid));
-  onSnapshot(q, async(snap)=>{
-    const list=$("#chatList"); list.innerHTML="";
+  onSnapshot(q, (snap)=>{
+    const list=$("#chatList");
     if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username or DD ID above to start.</li>"; return; }
-    for(const chatDoc of snap.docs){
+    const chatMap = new Map();
+    snap.forEach(chatDoc=>{
       const data=chatDoc.data();
       const otherUid=data.members.find(m=>m!==currentUser.uid);
-      if(!otherUid) continue;
-      let opponentName="DD User";
-      let opponentLetter="U";
-      let opponentPhoto="";
+      if(!otherUid) return;
+      const exist = chatMap.get(otherUid);
+      if(!exist) chatMap.set(otherUid, chatDoc);
+      else {
+        const t1 = exist.data().updated?.toMillis?.()||0;
+        const t2 = data.updated?.toMillis?.()||0;
+        if(t2>t1) chatMap.set(otherUid, chatDoc);
+      }
+    });
+    list.innerHTML="";
+    chatMap.forEach((chatDoc, otherUid)=>{
+      const data=chatDoc.data();
+      const unread = data.unreadCount?.[currentUser.uid] || 0;
+      const cached = userCache[otherUid];
+      const name = cached?.name || "DD User";
+      const letter = cached?.avatar || name[0] || "U";
+      const photo = cached?.photoURL || "";
+      const avatarHtml = photo ? `<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></div>` : `<div class="avatar" style="width:48px;height:48px;flex-shrink:0">${letter}</div>`;
+      const li=document.createElement("li");
+      li.id = "chat_"+otherUid;
+      li.style.display="flex"; li.style.alignItems="center"; li.style.gap="12px"; li.style.padding="12px"; li.style.borderBottom="1px solid rgba(255,255,255,0.06)"; li.style.cursor="pointer";
+      li.innerHTML=`${avatarHtml}<div style="flex:1;min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</b><small style="color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${escapeHtml(data.lastMsg||"Start chatting")}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`;
+      li.onclick=()=>openChat(chatDoc.id,otherUid, cached?.name||"");
+      list.appendChild(li);
+    });
+    chatMap.forEach(async (chatDoc, otherUid)=>{
+      if(userCache[otherUid]) return;
       try{
-        const usnap=await getDoc(doc(db,"users",otherUid));
+        const usnap = await getDoc(doc(db,"users",otherUid));
         if(usnap.exists()){
-          const u=usnap.data();
-          opponentName=u.name||"DD User";
-          opponentLetter=u.avatar||u.name?.[0]?.toUpperCase()||"U";
-          opponentPhoto=u.photoURL||"";
+          const u = usnap.data();
+          userCache[otherUid]=u;
+          const el = document.getElementById("chat_"+otherUid);
+          if(el){
+            const photo = u.photoURL||"";
+            const letter = u.avatar||u.name?.[0]?.toUpperCase()||"U";
+            const avatarHtml = photo ? `<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></div>` : `<div class="avatar" style="width:48px;height:48px;flex-shrink:0">${letter}</div>`;
+            const data = chatDoc.data();
+            el.innerHTML=`${avatarHtml}<div style="flex:1;min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.name||"DD User")}</b><small style="color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${escapeHtml(data.lastMsg||"Start chatting")}</small></div>${data.unreadCount?.[currentUser.uid]?`<span class="unread-badge">${data.unreadCount[currentUser.uid]}</span>`:''}`;
+            el.onclick=()=>openChat(chatDoc.id,otherUid,u.name);
+          }
         }
       }catch{}
-      const unread = data.unreadCount?.[currentUser.uid] || 0;
-      const li=document.createElement("li");
-      li.style.display="flex"; li.style.alignItems="center"; li.style.gap="12px"; li.style.padding="12px"; li.style.borderBottom="1px solid rgba(255,255,255,0.06)"; li.style.cursor="pointer";
-      const avatarHtml = opponentPhoto ? `<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0"><img src="${opponentPhoto}" style="width:100%;height:100%;object-fit:cover"></div>` : `<div class="avatar" style="width:48px;height:48px;flex-shrink:0">${opponentLetter}</div>`;
-      li.innerHTML=`${avatarHtml}<div style="flex:1;min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(opponentName)}</b><small style="color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${escapeHtml(data.lastMsg||"Start chatting")}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`;
-      li.onclick=()=>openChat(chatDoc.id,otherUid,opponentName); 
-      list.appendChild(li);
-    }
+    });
+  }, (err)=>{
+    console.log("Chats offline:", err.code);
   });
 }
 
@@ -335,7 +370,7 @@ $("#chatSearch").oninput = async (e)=>{
   if(clean!==raw){ try{ const q3=query(collection(db,"users"), where("ddId","==",clean)); const s3=await getDocs(q3); s3.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid && !found.find(f=>f.uid===u.uid)) found.push(u); }); }catch{} }
   list.innerHTML="";
   if(found.length===0){ list.innerHTML=`<li style='padding:15px'>No user found for "${escapeHtml(raw)}"</li>`; return; }
-  found.forEach(u=>{ const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${u.avatar||u.name[0]}</div><div><b>${escapeHtml(u.name)}</b><br><small>@${escapeHtml(u.username)} - DD ID: ${u.ddId}</small></div>`; li.onclick=()=>startChat(u.uid); list.appendChild(li); });
+  found.forEach(u=>{ userCache[u.uid]=u; const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${u.avatar||u.name[0]}</div><div><b>${escapeHtml(u.name)}</b><br><small>@${escapeHtml(u.username)} - DD ID: ${u.ddId}</small></div>`; li.onclick=()=>startChat(u.uid); list.appendChild(li); });
 };
 
 async function startChat(otherUid){
@@ -346,19 +381,22 @@ async function startChat(otherUid){
 
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
+// FIX 2: TRANSLATE TO ENGLISH TOO
 function openChat(chatId,otherUid,passedName=""){
   currentChatId=chatId; currentChatWith=otherUid; showScreen("chat-view");
-  $("#chatTitle").textContent=passedName||"Chat";
-  if(!passedName){
+  const cached = userCache[otherUid];
+  $("#chatTitle").textContent=passedName||cached?.name||"Chat";
+  if(!passedName && !cached){
     getDoc(doc(db,"users",otherUid)).then(s=>{
-      if(s.exists()) $("#chatTitle").textContent=s.data().name;
+      if(s.exists()){ userCache[otherUid]=s.data(); $("#chatTitle").textContent=s.data().name; }
     }).catch(()=>{});
   }
   updateDoc(doc(db,"chats",chatId),{[ `unreadCount.${currentUser.uid}`]:0}).catch(()=>{});
+  const myLang = localStorage.getItem("ddchat_lang") || "en";
   const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts"));
   onSnapshot(q,(snap)=>{
     const box=$("#chatMessages"); box.innerHTML="";
-    snap.forEach(m=>{
+    snap.forEach(async m=>{
       const d=m.data();
       const div=document.createElement("div");
       div.className="msg "+(d.from===currentUser.uid?"me":"them");
@@ -366,8 +404,25 @@ function openChat(chatId,otherUid,passedName=""){
       div.dataset.orig=d.text;
       div.innerHTML=escapeHtml(d.text);
       box.appendChild(div);
+      // translate other person's msg to MY lang including English
+      if(d.from!==currentUser.uid){
+        const key = myLang+"::"+d.text.trim();
+        if(transCache[key]){
+          const t=transCache[key];
+          if(t!==d.text) div.innerHTML=`${escapeHtml(t)}<br><small style="opacity:0.6;font-size:11px;display:block;margin-top:3px">${escapeHtml(d.text)}</small>`;
+        }else{
+          try{
+            const t = await googleTranslate(d.text, "auto", myLang);
+            if(t && t.toLowerCase()!==d.text.toLowerCase()){
+              transCache[key]=t;
+              localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache));
+              div.innerHTML=`${escapeHtml(t)}<br><small style="opacity:0.6;font-size:11px;display:block;margin-top:3px">${escapeHtml(d.text)}</small>`;
+            }
+          }catch{}
+        }
+      }
     });
-    box.scrollTop=box.scrollHeight;
+    setTimeout(()=>{ box.scrollTop=box.scrollHeight; }, 200);
   });
 }
 
@@ -593,6 +648,7 @@ document.addEventListener("click", async (e)=>{
         document.getElementById("editStatus").textContent="Saving...";
         try{
           await updateDoc(doc(db,"users",currentUser.uid),{name, about, phone, avatar:name[0].toUpperCase(), photoURL:finalPhoto});
+          if(finalPhoto) userCache[currentUser.uid]={...userCache[currentUser.uid], photoURL:finalPhoto, name};
           document.getElementById("profileName").textContent=name;
           const av=document.getElementById("profileAvatar");
           if(finalPhoto){ av.innerHTML=`<img src="${finalPhoto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; av.dataset.full=finalPhoto; }
