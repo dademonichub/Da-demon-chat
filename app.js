@@ -92,7 +92,6 @@ async function startChat(otherUid){ const members=[currentUser.uid,otherUid].sor
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","&quot;":"&#39;"}[c])); }
 function formatTimeWithAMPM(date){ if(!date) return ""; return date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true}); }
 
-// ================= FIX 1,2,3 - FILE VIEWER + OCR =================
 let currentViewerFile = { url:"", name:"", type:"" };
 let currentOcrText = "";
 function saveFileGlobal(url, name){ const a=document.createElement("a"); a.href=url; a.download=name||"file"; document.body.appendChild(a); a.click(); a.remove(); }
@@ -163,23 +162,24 @@ window.translateFileText = async function(){
     resEl.innerHTML=`<div style="background:#1e1e1e;padding:12px;border-radius:10px;color:white"><b>Translated (${toLang}):</b><br><div style="margin-top:8px;white-space:pre-wrap">${escapeHtml(translated)}</div></div>`;
   }catch(e){ resEl.innerHTML="Error: "+e.message; }
 };
+// FIXED BIG VIEW - uses this.src so base64 works
 function getFileBubbleHtml(d){
   const fileName = d.fileName || d.text?.replace("📎 ","") || "file";
   let fileUrl = d.fileUrl || d.audioUrl || "";
   const fileType = d.fileType || "";
   if(!fileUrl) return null;
+  const safeName = escapeHtml(fileName);
   const isImage = fileType.startsWith("image/") || d.msgType==="image" || fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-  const isVideo = fileType.startsWith("video/") || d.msgType==="video" || fileName.match(/\.(mp4|mov|webm|mkv)$/i);
+  const isVideo = fileType.startsWith("video/") || d.msgType==="video";
   const isVoice = fileType.startsWith("audio/") || d.msgType==="voice";
   if(isImage){
-    return `<div onclick="openFileViewer('${fileUrl}','${escapeHtml(fileName)}','image')" style="cursor:pointer"><img src="${fileUrl}" alt="${escapeHtml(fileName)}" style="max-width:240px;max-height:240px;border-radius:12px;display:block;object-fit:cover"><div style="font-size:11px;color:#bbb;margin-top:4px">${escapeHtml(fileName)} - Tap to view</div></div>`;
+    return `<div><img src="${fileUrl}" alt="${safeName}" onclick="openFileViewer(this.src,'${safeName}','image')" style="max-width:240px;max-height:240px;border-radius:12px;display:block;object-fit:cover;cursor:pointer"><div style="font-size:11px;color:#bbb;margin-top:4px">Tap to view full</div></div>`;
   } else if(isVideo){
-    return `<div style="max-width:240px"><video src="${fileUrl}" controls style="max-width:240px;border-radius:12px;display:block"></video><div style="font-size:11px;color:#bbb;margin-top:4px">${escapeHtml(fileName)} - Tap to view</div></div>`;
+    return `<div><video src="${fileUrl}" controls style="max-width:240px;border-radius:12px;display:block"></video><div onclick="openFileViewer('${fileUrl}','${safeName}','video')" style="font-size:11px;color:#bbb;margin-top:4px;cursor:pointer">Tap to view full</div></div>`;
   } else if(isVoice){
-    const toLang = localStorage.getItem("ddchat_lang")||"en";
-    return `<div style="min-width:220px;background:#2a1a6a;padding:8px;border-radius:12px"><audio controls src="${fileUrl}" style="width:100%"></audio><div style="font-size:12px;margin-top:6px"><div>🎤 ${escapeHtml(fileName)}</div><button onclick="event.stopPropagation(); this.innerText='🌐 Translated to ${toLang}'; this.style.background='#00c853'" style="margin-top:6px;background:#5E35B1;border:none;color:white;padding:5px 10px;border-radius:8px;font-size:11px">Translate to ${toLang}</button></div></div>`;
+    return `<div style="min-width:220px;background:#2a1a6a;padding:8px;border-radius:12px"><audio controls src="${fileUrl}" style="width:100%"></audio><div style="font-size:12px;margin-top:4px">🎤 ${safeName}</div></div>`;
   } else {
-    return `<div onclick="openFileViewer('${fileUrl}','${escapeHtml(fileName)}','doc')" style="display:flex;align-items:center;gap:10px;background:#2a1a6a;padding:12px;border-radius:12px;cursor:pointer;min-width:200px"><div style="font-size:30px">📄</div><div><div style="font-weight:bold;color:white;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(fileName)}</div><div style="font-size:11px;color:#aaa">Tap to open / Save</div></div></div>`;
+    return `<div onclick="openFileViewer('${fileUrl}','${safeName}','doc')" style="display:flex;align-items:center;gap:10px;background:#2a1a6a;padding:12px;border-radius:12px;cursor:pointer;min-width:200px"><div style="font-size:30px">📄</div><div><div style="font-weight:bold;color:white;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</div><div style="font-size:11px;color:#aaa">Tap to open</div></div></div>`;
   }
 }
 window.translateVoiceInBubble = async function(btn, url, originalText){
@@ -195,7 +195,6 @@ window.translateVoiceInBubble = async function(btn, url, originalText){
     btn.innerText="Translated ✓";
   }catch{ btn.innerText="Failed"; }
 };
-// ================= END FIX =================
 
 function openChat(chatId,otherUid,passedName=""){ 
   currentChatId=chatId; currentChatWith=otherUid; 
@@ -230,7 +229,6 @@ function openChat(chatId,otherUid,passedName=""){
     }).catch(()=>{}); 
   } 
   updateDoc(doc(db,"chats",chatId),{[ `unreadCount.${currentUser.uid}`]:0}).catch(()=>{}); 
-  const myLang = localStorage.getItem("ddchat_lang") || "en"; 
   const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts")); 
   onSnapshot(q,(snap)=>{ 
     const box=$("#chatMessages"); box.innerHTML=""; 
@@ -288,35 +286,57 @@ const chatVideoCall = document.getElementById('chatVideoCall');
 const chatVoiceCall = document.getElementById('chatVoiceCall');
 plusChat?.addEventListener('click', ()=> fileInput?.click());
 
-// ===== FIXED FREE FILE INPUT - NO STORAGE COST, 10GB MAX, NO HANG =====
+// ===== FIXED FILE INPUT - COMPRESS 1.65MB TO 600KB =====
+async function compressImage(file, maxKB = 800) {
+  return new Promise((resolve)=>{
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = e => { img.src = e.target.result; };
+    img.onload = ()=>{
+      let width = img.width, height = img.height;
+      const maxDim = 1280;
+      if(width > maxDim || height > maxDim){
+        if(width > height){ height *= maxDim/width; width = maxDim; } 
+        else { width *= maxDim/height; height = maxDim; }
+      }
+      let quality = 0.8;
+      function doCompress(q, w, h){
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img,0,0,w,h);
+        let dataUrl = canvas.toDataURL("image/jpeg", q);
+        let sizeKB = Math.round(dataUrl.length * 0.75 / 1024);
+        if(sizeKB > maxKB && q > 0.15){
+          return doCompress(q - 0.1, w*0.92, h*0.92);
+        }
+        return dataUrl;
+      }
+      resolve(doCompress(quality, width, height));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 fileInput?.addEventListener('change', async (e)=>{
   const f=e.target.files[0]; if(!f||!currentChatId) return;
   const sizeMB = f.size/1024/1024;
-  if(sizeMB>10240){ alert("File too big max 10GB. Your file: "+sizeMB.toFixed(2)+"MB"); e.target.value=""; return; }
   const tempId="up_"+Date.now();
-  $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out"><span class="msg-text">Uploading ${escapeHtml(f.name)} (${sizeMB.toFixed(1)}MB)... ⏳</span></div></div>`);
+  $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out"><span class="msg-text">Uploading ${escapeHtml(f.name)} (${sizeMB.toFixed(2)}MB)... ⏳</span></div></div>`);
   $("#chatMessages").scrollTop=$("#chatMessages").scrollHeight;
   let fileUrl="";
   try{
-    if(f.size < 200*1024*1024){
-      const form=new FormData(); form.append("reqtype","fileupload"); form.append("fileToUpload", f);
-      const res=await fetch("https://catbox.moe/user/api.php",{method:"POST",body:form});
-      fileUrl=(await res.text()).trim();
-      if(!fileUrl.startsWith("https://")) throw new Error("catbox fail");
-    } else { throw new Error("big file"); }
+    const form=new FormData(); form.append("reqtype","fileupload"); form.append("fileToUpload", f);
+    const res=await fetch("https://catbox.moe/user/api.php",{method:"POST",body:form});
+    fileUrl=(await res.text()).trim();
+    if(!fileUrl.startsWith("https://")) throw new Error("catbox fail");
   }catch{
-    try{
-      const fd=new FormData(); fd.append("file", f);
-      const r=await fetch("https://store1.gofile.io/uploadFile",{method:"POST",body:fd});
-      const j=await r.json();
-      if(j.status==="ok"){ fileUrl=j.data.downloadPage; } else { throw new Error("gofile fail"); }
-    }catch{
-      if(f.size < 900000){
-        fileUrl=await new Promise(res=>{ const reader=new FileReader(); reader.onload=ev=>res(ev.target.result); reader.readAsDataURL(f); });
-      } else {
-        alert("Free hosts down and file >900KB. Try again or use smaller file. Size: "+sizeMB.toFixed(2)+"MB");
-        document.getElementById(tempId)?.remove(); e.target.value=""; return;
-      }
+    if(f.type.startsWith("image/")){
+      fileUrl = await compressImage(f, 800);
+    } else if(f.size < 900000){
+      fileUrl=await new Promise(res=>{ const reader=new FileReader(); reader.onload=ev=>res(ev.target.result); reader.readAsDataURL(f); });
+    } else {
+      alert("File too big. For PDF/video >900KB enable Firebase Storage rules. Images auto-compress work.");
+      document.getElementById(tempId)?.remove(); e.target.value=""; return;
     }
   }
   document.getElementById(tempId)?.remove();
@@ -326,7 +346,6 @@ fileInput?.addEventListener('change', async (e)=>{
   e.target.value="";
 });
 
-// ===== FIXED FREE VOICE - NO STORAGE, NO HANG =====
 let recState=null;
 let mediaChunks=[];
 micBtn?.addEventListener('click', async ()=>{
