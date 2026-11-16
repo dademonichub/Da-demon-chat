@@ -131,8 +131,6 @@ const LANGUAGES = [
 const BAD_FIX = { "Client en Compte":"Compte", "Compte du client":"Compte" };
 const FORCE_FIX = { "QR Code": { "th":"คิวอาร์โค้ด", "zh":"二维码", "fr":"Code QR", "es":"Código QR", "de":"QR-Code" } };
 let transCache = JSON.parse(localStorage.getItem("ddchat_trans_v3") || "{}");
-
-// FIX 1: ALLOW AUTO DETECT
 async function googleTranslate(text, from, to){
   if(!text) return text;
   if(from===to && from!=="auto") return text;
@@ -381,7 +379,6 @@ async function startChat(otherUid){
 
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
-// FIX 2: TRANSLATE TO ENGLISH TOO
 function openChat(chatId,otherUid,passedName=""){
   currentChatId=chatId; currentChatWith=otherUid; showScreen("chat-view");
   const cached = userCache[otherUid];
@@ -404,7 +401,6 @@ function openChat(chatId,otherUid,passedName=""){
       div.dataset.orig=d.text;
       div.innerHTML=escapeHtml(d.text);
       box.appendChild(div);
-      // translate other person's msg to MY lang including English
       if(d.from!==currentUser.uid){
         const key = myLang+"::"+d.text.trim();
         if(transCache[key]){
@@ -530,70 +526,120 @@ document.addEventListener("click", async (e)=>{
           <button class="btn" id="resetQrBtn" style="flex:1;background:#ff3b30;color:#fff">Reset Code</button>
         </div>
         <div id="qrResult" style="margin-top:10px;padding:10px;background:#1e1250;border-radius:8px;min-height:30px">Ready to scan...</div>
-        <div id="qrCameraWrap" style="display:none;margin-top:10px"><video id="qrVideo" style="width:100%;border-radius:12px" autoplay playsinline></video><button class="btn" id="stopCameraBtn" style="width:100%;margin-top:8px;background:#444">Return / Stop Camera</button></div>
+        <div id="qrCameraWrap" style="display:none;position:fixed;inset:0;background:#000;z-index:99999;flex-direction:column">
+          <div style="padding:12px;display:flex;justify-content:space-between;align-items:center;background:#111;position:sticky;top:0">
+            <button id="stopCameraBtn" style="background:#ff3b30;border:none;color:white;padding:10px 18px;border-radius:22px;font-weight:bold;cursor:pointer">✕ Leave Camera</button>
+            <span style="color:white">Scanning QR...</span>
+          </div>
+          <video id="qrVideo" style="flex:1;width:100%;height:calc(100vh - 60px);object-fit:cover;background:black" autoplay playsinline muted></video>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:250px;height:250px;border:2px solid #00ff00;border-radius:12px;pointer-events:none"></div>
+        </div>
       </div>
     `);
     setTimeout(()=>{
       let streamRef=null;
-      document.getElementById("closeQrBtn").onclick=()=>document.getElementById("modal").classList.add("hidden");
+      let scanInterval=null;
+      const closeCamera = ()=>{
+        if(streamRef){ streamRef.getTracks().forEach(t=>t.stop()); streamRef=null; }
+        if(scanInterval){ clearInterval(scanInterval); scanInterval=null; }
+        const wrap=document.getElementById("qrCameraWrap");
+        if(wrap) wrap.style.display="none";
+      };
+      document.getElementById("closeQrBtn").onclick=()=>{ closeCamera(); document.getElementById("modal").classList.add("hidden"); };
       document.getElementById("shareQrTopRight").onclick=async()=>{
         if(navigator.share){ try{ await navigator.share({title:"My DDchat QR", text:`My DD ID: ${d.ddId}`}); }catch{} }
         else{ await navigator.clipboard.writeText(qrData); alert("QR data copied: "+qrData); }
       };
-      async function handleScanned(text){
+      async function fetchAndOpenChat(text){
+        closeCamera();
         const el=document.getElementById("qrResult");
-        el.innerHTML="Scanned: "+escapeHtml(text)+"<br>Processing...";
-        if(text.includes("DDCHAT:")){
-          const uid=text.split(":")[1];
-          if(uid && uid!==currentUser.uid){
-            const usnap=await getDoc(doc(db,"users",uid));
-            if(usnap.exists()){
-              const u=usnap.data();
-              el.innerHTML+=`<br><b>Found: ${u.name} (@${u.username})</b><br><button class="btn" id="goToAccount" style="margin-top:8px;width:100%">Go to Account - Start Chat</button>`;
-              document.getElementById("goToAccount").onclick=()=>{ document.getElementById("modal").classList.add("hidden"); startChat(uid); };
-            } else { el.innerHTML+="<br>User not found"; }
-          } else { el.innerHTML+="<br>That's your own QR"; }
-        } else { el.innerHTML+="<br>Invalid QR - Use DDchat QR"; }
+        if(!el) return;
+        el.innerHTML="Scanned: "+escapeHtml(text)+"<br>Fetching account...";
+        if(!text.includes("DDCHAT:")){ el.innerHTML="<br>Invalid QR - Use DDchat QR"; return; }
+        const parts=text.split(":");
+        const uid=parts[1];
+        const ddId=parts[2];
+        if(!uid){ el.innerHTML="Invalid QR data"; return; }
+        if(uid===currentUser.uid){ el.innerHTML="That's your own QR code"; return; }
+        try{
+          let usnap=await getDoc(doc(db,"users",uid));
+          if(!usnap.exists() && ddId){
+            const q1=query(collection(db,"users"), where("ddId","==",ddId));
+            const s1=await getDocs(q1);
+            if(!s1.empty) usnap=s1.docs[0];
+          }
+          if(usnap && usnap.exists()){
+            const u=usnap.data();
+            userCache[usnap.id]=u;
+            el.innerHTML=`Found: ${u.name} (@${u.username})<br>Opening chat...`;
+            setTimeout(()=>{
+              document.getElementById("modal").classList.add("hidden");
+              startChat(usnap.id);
+            },500);
+          }else{
+            el.innerHTML="User not found for this QR";
+          }
+        }catch(err){
+          el.innerHTML="Fetch failed: "+err.message;
+        }
       }
       document.getElementById("uploadQrBtn").onclick=()=>document.getElementById("qrUploadInput").click();
       document.getElementById("qrUploadInput").onchange=async(ev)=>{
         const file=ev.target.files[0]; if(!file) return;
-        document.getElementById("qrResult").textContent="Reading QR image...";
+        const el=document.getElementById("qrResult");
+        el.textContent="Reading QR image...";
         const fd=new FormData(); fd.append("file",file);
         try{
           const res=await fetch("https://api.qrserver.com/v1/read-qr-code/",{method:"POST",body:fd});
           const json=await res.json();
           const decoded=json[0]?.symbol[0]?.data;
-          if(decoded) handleScanned(decoded);
-          else document.getElementById("qrResult").textContent="Could not read QR - try clearer image";
-        }catch{ document.getElementById("qrResult").textContent="Upload failed - check internet"; }
+          if(decoded && decoded!=="null" && decoded) fetchAndOpenChat(decoded);
+          else el.textContent="Could not read QR - try clearer image";
+        }catch(err){ el.textContent="Upload failed: "+err.message+" - check internet"; }
       };
       document.getElementById("scanLeftBtn").onclick=async()=>{
-        const wrap=document.getElementById("qrCameraWrap"); const video=document.getElementById("qrVideo");
-        wrap.style.display="block";
+        const wrap=document.getElementById("qrCameraWrap"); 
+        const video=document.getElementById("qrVideo");
+        const resultEl=document.getElementById("qrResult");
+        wrap.style.display="flex";
+        resultEl.textContent="Opening camera...";
         try{
           const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
-          streamRef=stream; video.srcObject=stream;
-          document.getElementById("qrResult").textContent="Camera on - point at QR";
+          streamRef=stream; video.srcObject=stream; await video.play();
+          resultEl.textContent="Camera ON - point at QR code";
           if("BarcodeDetector" in window){
             const detector=new BarcodeDetector({formats:["qr_code"]});
-            const interval=setInterval(async()=>{
+            scanInterval=setInterval(async()=>{
+              if(!streamRef) return;
               try{
                 const codes=await detector.detect(video);
-                if(codes.length){ clearInterval(interval); if(streamRef) streamRef.getTracks().forEach(t=>t.stop()); wrap.style.display="none"; handleScanned(codes[0].rawValue); }
+                if(codes.length && codes[0].rawValue){
+                  clearInterval(scanInterval);
+                  fetchAndOpenChat(codes[0].rawValue);
+                }
               }catch{}
-            },500);
+            },400);
+          }else{
+            resultEl.textContent="Auto scan not supported here - use Upload QR button";
           }
-        }catch{ document.getElementById("qrResult").textContent="Camera permission denied"; }
+        }catch(err){ 
+          resultEl.textContent="Camera permission denied: "+err.message; 
+          wrap.style.display="none";
+        }
       };
-      document.getElementById("stopCameraBtn").onclick=()=>{ if(streamRef) streamRef.getTracks().forEach(t=>t.stop()); document.getElementById("qrCameraWrap").style.display="none"; document.getElementById("qrResult").textContent="Returned"; };
+      document.getElementById("stopCameraBtn").onclick=()=>{ 
+        closeCamera(); 
+        const el=document.getElementById("qrResult");
+        if(el) el.textContent="Camera closed - returned"; 
+      };
       document.getElementById("resetQrBtn").onclick=async()=>{
         const newDdId=Math.floor(10000000+Math.random()*90000000).toString();
         await updateDoc(doc(db,"users",currentUser.uid),{ddId:newDdId});
         const newData=`DDCHAT:${currentUser.uid}:${newDdId}`;
         const newUrl=`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(newData)}`;
         document.getElementById("qrImg").src=newUrl;
-        document.getElementById("qrResult").innerHTML=`New DD ID: ${newDdId} - QR reset done`;
+        const el=document.getElementById("qrResult");
+        if(el) el.innerHTML=`New DD ID: ${newDdId} - QR reset done`;
       };
     },100);
   }
