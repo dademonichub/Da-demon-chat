@@ -22,6 +22,38 @@
     .searchbar{ background:#2a1a6a !important; }
     #chatMessages{ background:#0a0614 !important; }
     #chatInputBar{ background:#1e1250 !important; }
+
+    /* ===== INDIVIDUAL CHAT FIXES ONLY ===== */
+    #chatHeader{ display:flex; align-items:center; gap:10px; padding:8px 10px !important; }
+    #chatAvatarWrap{ width:40px; height:40px; position:relative; flex-shrink:0; }
+    #chatAvatarWrap img, #chatAvatarWrap .avatar{ width:40px; height:40px; border-radius:50%; object-fit:cover; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#5E35B1,#7C4DFF); color:#fff; font-weight:700; border:2.5px solid #7C4DFF; box-shadow:0 0 0 2px #1e1250, 0 0 0 4px rgba(124,77,255,0.4); }
+    #chatAvatarStatus{ position:absolute; bottom:-1px; right:-1px; width:12px; height:12px; background:#00e676; border:2px solid #1e1250; border-radius:50%; }
+    #chatInfo{ display:flex; flex-direction:column; flex:1; overflow:hidden; line-height:1.1; }
+    #chatTitle{ font-weight:800; font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #chatSub{ display:flex; gap:6px; font-size:12px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #chatLastSeen{ opacity:0.6; font-size:11px; }
+    #chatAboutStatus{ color:#7C4DFF; font-weight:700; font-size:11px; } /* dynamic from about */
+    #chatHeader .call-btn{ background:#2a1a6a; width:36px; height:36px; border-radius:50%; border:none; color:#fff; display:flex; align-items:center; justify-content:center; }
+    #chatHeader .call-btn:hover{ background:#5E35B1; }
+
+    /* BUBBLES - BOLD + SHAPE + APP COLOR */
+    #chatMessages{ padding:12px; display:flex; flex-direction:column; gap:8px; }
+    .msg-row{ display:flex; width:100%; }
+    .msg-row.out{ justify-content:flex-end; }
+    .msg-row.in{ justify-content:flex-start; }
+    .bubble{ max-width:76%; padding:8px 10px 18px 10px; position:relative; font-weight:700; font-size:14.5px; line-height:1.3; word-break:break-word; }
+    .bubble.out{ background:linear-gradient(135deg,#5E35B1,#7C4DFF); color:#fff; border-radius:18px 18px 4px 18px; }
+    .bubble.in{ background:#2a1a6a; color:#fff; border-radius:18px 18px 18px 4px; }
+    .bubble .msg-time{ position:absolute; bottom:3px; right:8px; font-size:10px; opacity:0.8; display:flex; align-items:center; gap:3px; font-weight:600; }
+    .bubble .ticks{ color:#7C4DFF; font-size:11px; }
+    .bubble .ticks.read{ color:#00e5ff; }
+
+    /* DATE SEPARATOR */
+    .date-sep{ align-self:center; background:#1e1250; border:1px solid #2a1a6a; color:#a99bff; font-size:11px; font-weight:700; padding:4px 12px; border-radius:20px; margin:10px 0; }
+
+    /* INPUT BAR */
+    #chatInputBar{ gap:8px !important; padding:8px 10px !important; }
+    #chatInputBar #messageInput{ background:#2a1a6a !important; border-radius:22px; color:#fff; }
   </style>
 </head>
 <body>
@@ -62,68 +94,43 @@
 
 <!-- ================= MAIN APP ================= -->
 <div id="app" class="screen">
-  <!-- Top Bar - CLEAN, NO CAMERA, NO PLUS -->
   <header id="topbar">
     <div id="topLeft" class="icon-btn"><i class="fas fa-ellipsis-v"></i></div>
     <div id="topTitle">DDchat</div>
-    <div class="top-right">
-      <!-- REMOVED cameraBtn and plusBtn -->
-    </div>
+    <div class="top-right"></div>
   </header>
 
-  <!-- Pages -->
   <main id="pages">
     <section id="page-chats" class="page active">
       <input type="text" id="chatSearch" class="searchbar" placeholder="Search chats, contacts, DD ID..." />
       <ul id="chatList" class="list"></ul>
     </section>
-
     <section id="page-groups" class="page">
       <button id="createGroupBtn" class="btn small">+ Create Group</button>
       <ul id="groupList" class="list"></ul>
     </section>
-
     <section id="page-calls" class="page">
       <ul id="callList" class="list"></ul>
     </section>
-
     <section id="page-status" class="page">
       <button id="postStatusBtn" class="btn small">+ Post Status</button>
       <ul id="statusList" class="list"></ul>
     </section>
-
     <section id="page-profile" class="page">
-      <!-- ===== FIXED LIKE WHATSAPP VIDEO - 3 ICONS ONLY HERE ===== -->
       <div id="profileTopBar" style="position:sticky; top:0; z-index:20; display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:#0f0a1e; border-bottom:1px solid #1e1250;">
-        <!-- LEFT: Search -->
-        <button id="topSearchBtn" style="background:#2a1a6a; border:none; width:36px; height:36px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer;">
-          <i class="fas fa-search"></i>
-        </button>
-
-        <!-- MIDDLE: Name shows when scroll -->
-        <div id="profileStickyName" style="opacity:0; transition:opacity 0.25s; font-weight:700; font-size:17px; position:absolute; left:50%; transform:translateX(-50%); white-space:nowrap;">
-          User
-        </div>
-
-        <!-- RIGHT: QR + Edit -->
+        <button id="topSearchBtn" style="background:#2a1a6a; border:none; width:36px; height:36px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fas fa-search"></i></button>
+        <div id="profileStickyName" style="opacity:0; transition:opacity 0.25s; font-weight:700; font-size:17px; position:absolute; left:50%; transform:translateX(-50%); white-space:nowrap;">User</div>
         <div style="display:flex; gap:10px; margin-left:auto;">
-          <button id="topQrBtn" style="background:#2a1a6a; border:none; width:36px; height:36px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer;">
-            <i class="fas fa-qrcode"></i>
-          </button>
-          <button id="topEditBtn" style="background:#2a1a6a; border:none; width:36px; height:36px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer;">
-            <i class="fas fa-pen" style="font-size:13px;"></i>
-          </button>
+          <button id="topQrBtn" style="background:#2a1a6a; border:none; width:36px; height:36px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fas fa-qrcode"></i></button>
+          <button id="topEditBtn" style="background:#2a1a6a; border:none; width:36px; height:36px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fas fa-pen" style="font-size:13px;"></i></button>
         </div>
       </div>
-
-      <!-- SCROLL AREA - MIDDLE SPACE SHOWS NAME ON SCROLL -->
       <div id="profileScrollArea" style="overflow-y:auto; height:calc(100vh - 115px);">
         <div class="profile-header" style="text-align:center; padding:20px 15px 10px 15px;">
           <div class="avatar" id="profileAvatar" style="width:85px; height:85px; margin:0 auto; font-size:32px; background:linear-gradient(135deg,#5E35B1,#7C4DFF); border-radius:50%; display:flex; align-items:center; justify-content:center; color:white;">?</div>
           <h3 id="profileName" style="margin:12px 0 4px 0;">User</h3>
           <p id="profileUsername" style="opacity:0.6; font-size:14px;">@username</p>
         </div>
-
         <ul class="list settings-list">
           <li data-setting="account">Account <i class="fas fa-chevron-right"></i></li>
           <li data-setting="privacy">Privacy <i class="fas fa-chevron-right"></i></li>
@@ -139,7 +146,6 @@
     </section>
   </main>
 
-  <!-- Bottom Nav -->
   <nav id="bottomnav">
     <button data-page="profile"><i class="fas fa-user"></i><span>You</span></button>
     <button data-page="chats" class="active"><i class="fas fa-comment"></i><span>Chats</span></button>
@@ -149,24 +155,58 @@
   </nav>
 </div>
 
-<!-- ================= CHAT VIEW ================= -->
+<!-- ================= CHAT VIEW - UPDATED ONLY THIS PART ================= -->
 <div id="chat-view" class="screen">
   <header id="chatHeader">
     <div class="icon-btn" id="chatBack"><i class="fas fa-arrow-left"></i></div>
-    <div id="chatTitle">Chat</div>
+    
+    <!-- 1. ROUND PROFILE + STATUS RING -->
+    <div id="chatAvatarWrap">
+      <div id="chatAvatarImg" class="avatar">?</div>
+      <span id="chatAvatarStatus"></span>
+    </div>
+
+    <!-- INFO: NAME + LAST SEEN + WORK STATUS (DYNAMIC ABOUT) -->
+    <div id="chatInfo">
+      <div id="chatTitle">Chat</div>
+      <div id="chatSub">
+        <span id="chatAboutStatus">At work</span>
+        <span>•</span>
+        <span id="chatLastSeen">last seen today, 09:12</span>
+      </div>
+    </div>
+
+    <!-- 3. VIDEO CALL + 4. VOICE CALL -->
+    <button id="chatVideoCall" class="call-btn"><i class="fas fa-video"></i></button>
+    <button id="chatVoiceCall" class="call-btn"><i class="fas fa-phone"></i></button>
+
     <div class="icon-btn" id="chatMenu"><i class="fas fa-ellipsis-v"></i></div>
   </header>
-  <div id="chatMessages"></div>
+
+  <div id="chatMessages">
+    <!-- EXAMPLE TO SHOW EFFECT - JS WILL RENDER REAL ONES -->
+    <div class="date-sep">Today</div>
+    <div class="msg-row in"><div class="bubble in">Hello boss! <span class="msg-time">09:10</span></div></div>
+    <div class="msg-row out"><div class="bubble out">Sharp! <span class="msg-time">09:11 <span class="ticks read"><i class="fas fa-check-double"></i></span></span></div></div>
+  </div>
+
   <div id="chatInputBar">
-    <input type="file" id="fileInput" hidden />
+    <input type="file" id="fileInput" hidden accept="image/*,video/*,application/*" />
+    <input type="file" id="cameraInput" hidden accept="image/*" capture="environment" />
+    
+    <!-- PLUS = FILE + PICTURE + PHOTO -->
     <button id="plusChat" class="icon-btn"><i class="fas fa-plus"></i></button>
+    
+    <!-- STICKER ICON -->
+    <button id="stickerBtn" class="icon-btn"><i class="fas fa-face-smile"></i></button>
+
     <input type="text" id="messageInput" placeholder="Type a message..." />
+    
     <button id="micBtn" class="icon-btn"><i class="fas fa-microphone"></i></button>
     <button id="sendBtn" class="icon-btn send"><i class="fas fa-paper-plane"></i></button>
   </div>
 </div>
 
-<!-- Modal -->
 <div id="modal" class="modal hidden">
   <div class="modal-content">
     <h3 id="modalTitle">Modal</h3>
