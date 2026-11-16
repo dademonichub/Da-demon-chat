@@ -40,9 +40,27 @@ function openFullPhoto(url){ if(!url) return; showModal("Photo",`<div style="pos
 function loadChats(){ if(!currentUser) return; const q = query(collection(db, "chats"), where("members","array-contains",currentUser.uid)); onSnapshot(q, (snap)=>{ const list=$("#chatList"); if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username or DD ID above to start.</li>"; return; } const chatMap = new Map(); snap.forEach(chatDoc=>{ const data=chatDoc.data(); const otherUid=data.members.find(m=>m!==currentUser.uid); if(!otherUid) return; const exist = chatMap.get(otherUid); if(!exist) chatMap.set(otherUid, chatDoc); else { const t1 = exist.data().updated?.toMillis?.()||0; const t2 = data.updated?.toMillis?.()||0; if(t2>t1) chatMap.set(otherUid, chatDoc); } }); list.innerHTML=""; chatMap.forEach((chatDoc, otherUid)=>{ const data=chatDoc.data(); const unread = data.unreadCount?.[currentUser.uid] || 0; const cached = userCache[otherUid]; const name = cached?.name || "DD User"; const letter = cached?.avatar || name[0] || "U"; const photo = cached?.photoURL || ""; const avatarHtml = photo ? `<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></div>` : `<div class="avatar" style="width:48px;height:48px;flex-shrink:0">${letter}</div>`; const li=document.createElement("li"); li.id = "chat_"+otherUid; li.style.display="flex"; li.style.alignItems="center"; li.style.gap="12px"; li.style.padding="12px"; li.style.borderBottom="1px solid rgba(255,255,255,0.06)"; li.style.cursor="pointer"; li.innerHTML=`${avatarHtml}<div style="flex:1;min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</b><small style="color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${escapeHtml(data.lastMsg||"Start chatting")}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`; li.onclick=()=>openChat(chatDoc.id,otherUid, cached?.name||""); list.appendChild(li); }); chatMap.forEach(async (chatDoc, otherUid)=>{ if(userCache[otherUid]) return; try{ const usnap = await getDoc(doc(db,"users",otherUid)); if(usnap.exists()){ const u = usnap.data(); userCache[otherUid]=u; const el = document.getElementById("chat_"+otherUid); if(el){ const photo = u.photoURL||""; const letter = u.avatar||u.name?.[0]?.toUpperCase()||"U"; const avatarHtml = photo ? `<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></div>` : `<div class="avatar" style="width:48px;height:48px;flex-shrink:0">${letter}</div>`; const data = chatDoc.data(); el.innerHTML=`${avatarHtml}<div style="flex:1;min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.name||"DD User")}</b><small style="color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${escapeHtml(data.lastMsg||"Start chatting")}</small></div>${data.unreadCount?.[currentUser.uid]?`<span class="unread-badge">${data.unreadCount[currentUser.uid]}</span>`:''}`; el.onclick=()=>openChat(chatDoc.id,otherUid,u.name); } } }catch{} }); }, (err)=>{ console.log("Chats offline:", err.code); }); }
 $("#chatSearch").oninput = async (e)=>{ const raw = e.target.value.trim(); if(raw.length<1){ loadChats(); return; } const list=$("#chatList"); list.innerHTML="<li style='padding:15px'>Searching...</li>"; let found = []; const low = raw.toLowerCase(); try{ const q1=query(collection(db,"users"), where("username","==",low)); const s1=await getDocs(q1); s1.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid) found.push(u); }); }catch{} try{ const q2=query(collection(db,"users"), where("ddId","==",raw)); const s2=await getDocs(q2); s2.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid && !found.find(f=>f.uid===u.uid)) found.push(u); }); }catch{} const clean = raw.replace("DD-","").replace("DD","").trim(); if(clean!==raw){ try{ const q3=query(collection(db,"users"), where("ddId","==",clean)); const s3=await getDocs(q3); s3.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid && !found.find(f=>f.uid===u.uid)) found.push(u); }); }catch{} } list.innerHTML=""; if(found.length===0){ list.innerHTML=`<li style='padding:15px'>No user found for "${escapeHtml(raw)}"</li>`; return; } found.forEach(u=>{ userCache[u.uid]=u; const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${u.avatar||u.name[0]}</div><div><b>${escapeHtml(u.name)}</b><br><small>@${escapeHtml(u.username)} - DD ID: ${u.ddId}</small></div>`; li.onclick=()=>startChat(u.uid); list.appendChild(li); }); };
 async function startChat(otherUid){ const members=[currentUser.uid,otherUid].sort(); const chatId=members.join("_"); const ref=doc(db,"chats",chatId); const snap=await getDoc(ref); if(!snap.exists()) await setDoc(ref,{members,lastMsg:"",unreadCount:{[currentUser.uid]:0,[otherUid]:0},updated:serverTimestamp()}); openChat(chatId,otherUid); }
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","&quot;":"&#39;"}[c])); }
 
-// ===== FIXED openChat - ROUND PROFILE + LAST SEEN + WORK STATUS DYNAMIC =====
+// ===== FIXED openChat - ONLY THIS PART FIXED FOR 5 COMPLAINTS =====
+function formatTimeWithAMPM(date){
+  if(!date) return "";
+  return date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true});
+}
+function formatLastSeen(date){
+  if(!date) return "last seen today, "+formatTimeWithAMPM(new Date());
+  const d = date instanceof Date ? date : date.toDate ? date.toDate() : new Date();
+  const now = new Date();
+  const diff = Math.floor((now - d)/60000);
+  if(diff < 1) return "Online";
+  if(diff < 60) return `last seen ${diff}m ago, ${formatTimeWithAMPM(d)}`;
+  const isToday = d.toDateString() === now.toDateString();
+  if(isToday) return `last seen today, ${formatTimeWithAMPM(d)}`;
+  return `last seen ${d.toLocaleDateString()}, ${formatTimeWithAMPM(d)}`;
+}
+
+let lastSeenInterval = null;
+
 function openChat(chatId,otherUid,passedName=""){ 
   currentChatId=chatId; currentChatWith=otherUid; 
   showScreen("chat-view"); 
@@ -51,18 +69,46 @@ function openChat(chatId,otherUid,passedName=""){
   const chatAvatarImg = $("#chatAvatarImg");
   const chatAboutStatus = $("#chatAboutStatus");
   const chatLastSeen = $("#chatLastSeen");
+  const chatAvatarStatus = $("#chatAvatarStatus");
+  const chatAboutBubble = $("#chatAboutBubble");
   
   chatTitle.textContent=passedName||cached?.name||"Chat";
   
-  // round profile + ring
   if(chatAvatarImg){
     if(cached?.photoURL){ chatAvatarImg.innerHTML=`<img src="${cached.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
     else { chatAvatarImg.textContent = (cached?.avatar||cached?.name?.[0]||"?").toUpperCase(); }
   }
-  // work status = from about field
-  if(chatAboutStatus){ chatAboutStatus.textContent = cached?.about || "Hey there! I'm using DDchat."; }
-  // last seen
-  if(chatLastSeen){ chatLastSeen.textContent = "last seen today"; }
+
+  // FIX 1: About bubble left top corner
+  if(chatAboutStatus){
+    const aboutText = cached?.about || "Hey there! I'm using DDchat.";
+    chatAboutStatus.textContent = aboutText;
+    if(chatAboutBubble){ chatAboutBubble.style.display = aboutText ? "block" : "none"; }
+  }
+
+  // FIX 2 & 3: Last seen LIVE + green dot ON/OFF
+  if(chatLastSeen && chatAvatarStatus){
+    const isOnline = cached?.isOnline === true;
+    if(isOnline){
+      chatLastSeen.textContent = "Online";
+      chatAvatarStatus.className = "online";
+    } else {
+      chatLastSeen.textContent = formatLastSeen(cached?.lastSeen || new Date());
+      chatAvatarStatus.className = "offline";
+    }
+    // live update every 60s
+    if(lastSeenInterval) clearInterval(lastSeenInterval);
+    lastSeenInterval = setInterval(()=>{
+      const c = userCache[otherUid];
+      if(!c) return;
+      if(c.isOnline){
+        chatLastSeen.textContent = "Online";
+        chatAvatarStatus.className = "online";
+      } else {
+        chatLastSeen.textContent = formatLastSeen(c.lastSeen);
+      }
+    }, 60000);
+  }
 
   if(!passedName && !cached){ 
     getDoc(doc(db,"users",otherUid)).then(s=>{ 
@@ -70,8 +116,19 @@ function openChat(chatId,otherUid,passedName=""){
         const u=s.data(); userCache[otherUid]=u; 
         $("#chatTitle").textContent=u.name;
         if(chatAvatarImg){ if(u.photoURL) chatAvatarImg.innerHTML=`<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; else chatAvatarImg.textContent=u.avatar||u.name[0]; }
-        if(chatAboutStatus) chatAboutStatus.textContent = u.about || "Available";
-        if(chatLastSeen) chatLastSeen.textContent = "last seen recently";
+        if(chatAboutStatus){ 
+          chatAboutStatus.textContent = u.about || "Available";
+          if(chatAboutBubble) chatAboutBubble.style.display = "block";
+        }
+        if(chatLastSeen){
+          if(u.isOnline){
+            chatLastSeen.textContent="Online";
+            if(chatAvatarStatus) chatAvatarStatus.className="online";
+          } else {
+            chatLastSeen.textContent = formatLastSeen(u.lastSeen);
+            if(chatAvatarStatus) chatAvatarStatus.className="offline";
+          }
+        }
       } 
     }).catch(()=>{}); 
   } 
@@ -80,21 +137,26 @@ function openChat(chatId,otherUid,passedName=""){
   const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts")); 
   onSnapshot(q,(snap)=>{ 
     const box=$("#chatMessages"); box.innerHTML=""; 
-    // date separator
     const sep=document.createElement("div"); sep.className="date-sep"; sep.textContent="Today"; box.appendChild(sep);
     snap.forEach(async m=>{ 
       const d=m.data(); 
       const row=document.createElement("div"); row.className="msg-row "+(d.from===currentUser.uid?"out":"in");
       const bubble=document.createElement("div"); bubble.className="bubble "+(d.from===currentUser.uid?"out":"in");
-      const timeStr = d.ts?.toDate ? d.ts.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-      const ticks = d.from===currentUser.uid ? `<span class="ticks read"><i class="fas fa-check-double"></i></span>` : "";
-      bubble.innerHTML=`${escapeHtml(d.text)}<span class="msg-time">${timeStr} ${ticks}</span>`;
+      // FIX 4 & 5: time with AM/PM + msg-text separate + tick one line + fit-content
+      const dateObj = d.ts?.toDate ? d.ts.toDate() : new Date();
+      const timeStr = dateObj.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true});
+      let tickClass = "sent";
+      let tickIcon = `<i class="fas fa-check"></i>`;
+      if(d.status === 'delivered'){ tickClass="delivered"; tickIcon=`<i class="fas fa-check-double"></i>`; }
+      if(d.status === 'read' || d.read){ tickClass="read"; tickIcon=`<i class="fas fa-check-double"></i>`; }
+      const ticks = d.from===currentUser.uid ? `<span class="ticks ${tickClass}">${tickIcon}</span>` : "";
+      bubble.innerHTML=`<span class="msg-text">${escapeHtml(d.text)}</span><span class="msg-time">${timeStr} ${ticks}</span>`;
       bubble.dataset.orig=d.text;
       row.appendChild(bubble);
       box.appendChild(row);
       if(d.from!==currentUser.uid){ 
         const key = myLang+"::"+d.text.trim(); 
-        if(transCache[key]){ /* translated already handled */ }else{ 
+        if(!transCache[key]){ 
           try{ const t = await googleTranslate(d.text, "auto", myLang); if(t && t.toLowerCase()!==d.text.toLowerCase()){ transCache[key]=t; localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); } }catch{} 
         } 
       } 
@@ -104,10 +166,10 @@ function openChat(chatId,otherUid,passedName=""){
 }
 
 $("#sendBtn").onclick=sendMessage; $("#messageInput").addEventListener("keypress",(e)=>{ if(e.key==="Enter") sendMessage(); });
-async function sendMessage(){ const text=$("#messageInput").value.trim(); if(!text||!currentChatId) return; $("#messageInput").value=""; await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text,ts:serverTimestamp()}); await updateDoc(doc(db,"chats",currentChatId),{lastMsg:text,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)}); }
-$("#chatBack").onclick=()=>showScreen("app");
+async function sendMessage(){ const text=$("#messageInput").value.trim(); if(!text||!currentChatId) return; $("#messageInput").value=""; await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text,ts:serverTimestamp(), status:'sent'}); await updateDoc(doc(db,"chats",currentChatId),{lastMsg:text,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)}); }
+$("#chatBack").onclick=()=>{ if(lastSeenInterval) clearInterval(lastSeenInterval); showScreen("app"); };
 
-// ===== PLUS + MIC + STICKER + CALLS - SHORT CODE =====
+// ===== PLUS + MIC + STICKER + CALLS =====
 const plusChat = document.getElementById('plusChat');
 const fileInput = document.getElementById('fileInput');
 const micBtn = document.getElementById('micBtn');
@@ -139,7 +201,6 @@ micBtn?.addEventListener('click', async ()=>{
 stickerBtn?.addEventListener('click', ()=>{ if(!currentChatId) return; document.getElementById('messageInput').value+=" 😊"; });
 chatVideoCall?.addEventListener('click', ()=> showModal("Video Call","Video calling soon"));
 chatVoiceCall?.addEventListener('click', ()=> showModal("Voice Call","Voice calling soon"));
-// ===== END FIX =====
 
 $("#postStatusBtn").onclick=()=>{ showModal("Post Status",`<input id="statusText" placeholder="What's on your mind?" style="width:100%;padding:10px"/><button class="btn" id="saveStatus">Post</button>`); setTimeout(()=>{ $("#saveStatus").onclick= async ()=>{ const text=$("#statusText").value.trim(); if(!text) return; await addDoc(collection(db,"status"),{uid:currentUser.uid,text,ts:serverTimestamp()}); $("#modal").classList.add("hidden"); }; },100); };
 function loadStatus(){ const q=query(collection(db,"status"), orderBy("ts","desc")); onSnapshot(q,(snap)=>{ const list=$("#statusList"); list.innerHTML=""; snap.forEach(d=>{ const s=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${s.uid.slice(0,2)}</div><div><b>Status</b><br><small>${escapeHtml(s.text)}</small></div>`; list.appendChild(li); }); }); }
