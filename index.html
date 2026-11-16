@@ -81,7 +81,7 @@
     <h2 id="authTitle">Sign Up</h2>
     <input type="text" id="authName" placeholder="Full name" />
     <input type="text" id="authUsername" placeholder="Username (unique)" />
-    <input type="email" id="authEmail" placeholder="Email" />
+    <input type="text" id="authEmail" placeholder="Email" />
     <input type="password" id="authPassword" placeholder="Password" />
     <button id="authBtn" class="btn">Create Account</button>
     <p class="switch">
@@ -155,53 +155,43 @@
   </nav>
 </div>
 
-<!-- ================= CHAT VIEW - UPDATED ONLY THIS PART ================= -->
+<!-- ================= CHAT VIEW - FIXED ONLY THIS PART ================= -->
 <div id="chat-view" class="screen">
   <header id="chatHeader">
     <div class="icon-btn" id="chatBack"><i class="fas fa-arrow-left"></i></div>
     
-    <!-- 1. ROUND PROFILE + STATUS RING -->
     <div id="chatAvatarWrap">
+      <div id="chatAboutBubble"><span id="chatAboutStatus">At work</span></div>
       <div id="chatAvatarImg" class="avatar">?</div>
       <span id="chatAvatarStatus"></span>
     </div>
 
-    <!-- INFO: NAME + LAST SEEN + WORK STATUS (DYNAMIC ABOUT) -->
     <div id="chatInfo">
       <div id="chatTitle">Chat</div>
       <div id="chatSub">
-        <span id="chatAboutStatus">At work</span>
-        <span>•</span>
-        <span id="chatLastSeen">last seen today, 09:12</span>
+        <div id="chatLastSeenWrap">
+          <span id="chatLastSeen">last seen today, 09:12</span>
+        </div>
       </div>
     </div>
 
-    <!-- 3. VIDEO CALL + 4. VOICE CALL -->
     <button id="chatVideoCall" class="call-btn"><i class="fas fa-video"></i></button>
     <button id="chatVoiceCall" class="call-btn"><i class="fas fa-phone"></i></button>
-
     <div class="icon-btn" id="chatMenu"><i class="fas fa-ellipsis-v"></i></div>
   </header>
 
   <div id="chatMessages">
-    <!-- EXAMPLE TO SHOW EFFECT - JS WILL RENDER REAL ONES -->
     <div class="date-sep">Today</div>
-    <div class="msg-row in"><div class="bubble in">Hello boss! <span class="msg-time">09:10</span></div></div>
-    <div class="msg-row out"><div class="bubble out">Sharp! <span class="msg-time">09:11 <span class="ticks read"><i class="fas fa-check-double"></i></span></span></div></div>
+    <div class="msg-row in"><div class="bubble in"><span class="msg-text">Hello boss!</span> <span class="msg-time">09:10</span></div></div>
+    <div class="msg-row out"><div class="bubble out"><span class="msg-text">Sharp!</span> <span class="msg-time">09:11 <span class="ticks read"><i class="fas fa-check-double"></i></span></span></div></div>
   </div>
 
   <div id="chatInputBar">
     <input type="file" id="fileInput" hidden accept="image/*,video/*,application/*" />
     <input type="file" id="cameraInput" hidden accept="image/*" capture="environment" />
-    
-    <!-- PLUS = FILE + PICTURE + PHOTO -->
     <button id="plusChat" class="icon-btn"><i class="fas fa-plus"></i></button>
-    
-    <!-- STICKER ICON -->
     <button id="stickerBtn" class="icon-btn"><i class="fas fa-face-smile"></i></button>
-
     <input type="text" id="messageInput" placeholder="Type a message..." />
-    
     <button id="micBtn" class="icon-btn"><i class="fas fa-microphone"></i></button>
     <button id="sendBtn" class="icon-btn send"><i class="fas fa-paper-plane"></i></button>
   </div>
