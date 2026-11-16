@@ -32,11 +32,10 @@
     #chatTitle{ font-weight:800; font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     #chatSub{ display:flex; gap:6px; font-size:12px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     #chatLastSeen{ opacity:0.6; font-size:11px; }
-    #chatAboutStatus{ color:#7C4DFF; font-weight:700; font-size:11px; } /* dynamic from about */
+    #chatAboutStatus{ color:#7C4DFF; font-weight:700; font-size:11px; }
     #chatHeader .call-btn{ background:#2a1a6a; width:36px; height:36px; border-radius:50%; border:none; color:#fff; display:flex; align-items:center; justify-content:center; }
     #chatHeader .call-btn:hover{ background:#5E35B1; }
 
-    /* BUBBLES - BOLD + SHAPE + APP COLOR */
     #chatMessages{ padding:12px; display:flex; flex-direction:column; gap:8px; }
     .msg-row{ display:flex; width:100%; }
     .msg-row.out{ justify-content:flex-end; }
@@ -48,10 +47,8 @@
     .bubble .ticks{ color:#7C4DFF; font-size:11px; }
     .bubble .ticks.read{ color:#00e5ff; }
 
-    /* DATE SEPARATOR */
     .date-sep{ align-self:center; background:#1e1250; border:1px solid #2a1a6a; color:#a99bff; font-size:11px; font-weight:700; padding:4px 12px; border-radius:20px; margin:10px 0; }
 
-    /* INPUT BAR */
     #chatInputBar{ gap:8px !important; padding:8px 10px !important; }
     #chatInputBar #messageInput{ background:#2a1a6a !important; border-radius:22px; color:#fff; }
   </style>
@@ -155,17 +152,15 @@
   </nav>
 </div>
 
-<!-- ================= CHAT VIEW - FIXED ONLY THIS PART ================= -->
+<!-- ================= CHAT VIEW ================= -->
 <div id="chat-view" class="screen">
   <header id="chatHeader">
     <div class="icon-btn" id="chatBack"><i class="fas fa-arrow-left"></i></div>
-    
     <div id="chatAvatarWrap">
       <div id="chatAboutBubble"><span id="chatAboutStatus">At work</span></div>
       <div id="chatAvatarImg" class="avatar">?</div>
       <span id="chatAvatarStatus"></span>
     </div>
-
     <div id="chatInfo">
       <div id="chatTitle">Chat</div>
       <div id="chatSub">
@@ -174,7 +169,6 @@
         </div>
       </div>
     </div>
-
     <button id="chatVideoCall" class="call-btn"><i class="fas fa-video"></i></button>
     <button id="chatVoiceCall" class="call-btn"><i class="fas fa-phone"></i></button>
     <div class="icon-btn" id="chatMenu"><i class="fas fa-ellipsis-v"></i></div>
@@ -187,7 +181,7 @@
   </div>
 
   <div id="chatInputBar">
-    <input type="file" id="fileInput" hidden accept="image/*,video/*,application/*" />
+    <input type="file" id="fileInput" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt" />
     <input type="file" id="cameraInput" hidden accept="image/*" capture="environment" />
     <button id="plusChat" class="icon-btn"><i class="fas fa-plus"></i></button>
     <button id="stickerBtn" class="icon-btn"><i class="fas fa-face-smile"></i></button>
@@ -204,6 +198,9 @@
     <button class="btn" id="modalClose">Close</button>
   </div>
 </div>
+
+<!-- FIX: FILE VIEWER ROOT - AUTO CREATED BY JS TOO -->
+<div id="fileViewerModal" style="display:none"></div>
 
 <script type="module" src="app.js"></script>
 </body>
