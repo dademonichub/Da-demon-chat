@@ -95,10 +95,8 @@ body { background:#0f0a1e; color:#e9edef; height:100vh; overflow:hidden; }
 
 /* ================= FIXED FOR YOUR ISSUES - ABOUT UNDER + ONLINE + TICKS ================= */
 
-/* Avatar wrap - allow bubble under */
 #chatAvatarWrap{ overflow: visible !important; position: relative !important; width:44px; height:44px; flex-shrink:0; }
 
-/* ABOUT - UNDER AVATAR LIKE SCREENSHOT */
 #chatAboutBubble{
   position: absolute !important;
   top: 48px !important;
@@ -137,7 +135,6 @@ body { background:#0f0a1e; color:#e9edef; height:100vh; overflow:hidden; }
   font-size:12px !important;
 }
 
-/* LAST SEEN - SLIDE FOR AM/PM */
 #chatHeader{ overflow: visible !important; }
 #chatInfo{ overflow: visible !important; }
 #chatSub{ overflow: visible !important; display:flex !important; }
@@ -160,7 +157,6 @@ body { background:#0f0a1e; color:#e9edef; height:100vh; overflow:hidden; }
   opacity: 0.7 !important;
 }
 
-/* GREEN DOT - REAL ONLINE WHEN ENTER APP */
 #chatAvatarStatus{
   position: absolute !important;
   bottom: -2px !important;
@@ -182,7 +178,6 @@ body { background:#0f0a1e; color:#e9edef; height:100vh; overflow:hidden; }
 }
 #chatAvatarStatus.hidden{ display:none !important; }
 
-/* BUBBLE - SMALL FOR Hi, BIG FOR LONG + TIME+TICK ONE LINE */
 #chatMessages .msg-row{ display:flex !important; width:100% !important; }
 #chatMessages .msg-row.out{ justify-content:flex-end !important; }
 #chatMessages .msg-row.in{ justify-content:flex-start !important; }
@@ -216,8 +211,14 @@ body { background:#0f0a1e; color:#e9edef; height:100vh; overflow:hidden; }
   clear: both !important;
 }
 
-/* TICKS - 1 grey = data OFF, 2 grey = data ON, 2 light blue = read inside chat */
 #chatMessages .bubble .ticks{ font-size:11px !important; display:inline-flex !important; white-space:nowrap !important; }
 #chatMessages .bubble .ticks.sent{ color:#9c88b0 !important; }
 #chatMessages .bubble .ticks.delivered{ color:#9c88b0 !important; }
-#chatMessages .bubble .ticks.read{ color:#53bdeb !important; } /* WhatsApp light blue */
+#chatMessages .bubble .ticks.read{ color:#53bdeb !important; }
+
+/* ===== NEW FIX - REAL FILE / IMAGE / VOICE - SMALL CODE ONLY ===== */
+.real-file-box{ border-radius:12px; overflow:hidden; max-width:240px; cursor:pointer; }
+.real-file-box img{ display:block; width:100%; max-width:240px; max-height:240px; object-fit:cover; border-radius:12px; }
+.real-file-box.doc-box{ background:#252542; border:1px solid #3a3a5a; }
+.real-file-box.voice-box{ background:#252542; padding:8px; border-radius:12px; min-width:200px; }
+.real-file-box.voice-box audio{ width:100%; border-radius:8px; }
