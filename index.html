@@ -93,33 +93,49 @@
     </section>
 
     <section id="page-profile" class="page">
-      <!-- PROFILE HEADER WITH 3 NEW ICONS ONLY HERE -->
-      <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; background:#1e1250;">
-        <h3 style="margin:0;">Profile</h3>
-        <div id="topBar" style="display:flex; gap:14px; align-items:center;">
-          <button id="topSearchBtn" class="icon-btn" style="background:#2a1a6a;"><i class="fas fa-search"></i></button>
-          <button id="topQrBtn" class="icon-btn" style="background:#2a1a6a;"><i class="fas fa-qrcode"></i></button>
-          <button id="topEditBtn" class="icon-btn" style="background:#2a1a6a;"><i class="fas fa-pen"></i></button>
+      <!-- ===== FIXED LIKE WHATSAPP VIDEO - 3 ICONS ONLY HERE ===== -->
+      <div id="profileTopBar" style="position:sticky; top:0; z-index:20; display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:#0f0a1e; border-bottom:1px solid #1e1250;">
+        <!-- LEFT: Search -->
+        <button id="topSearchBtn" style="background:#2a1a6a; border:none; width:36px; height:36px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+          <i class="fas fa-search"></i>
+        </button>
+
+        <!-- MIDDLE: Name shows when scroll -->
+        <div id="profileStickyName" style="opacity:0; transition:opacity 0.25s; font-weight:700; font-size:17px; position:absolute; left:50%; transform:translateX(-50%); white-space:nowrap;">
+          User
+        </div>
+
+        <!-- RIGHT: QR + Edit -->
+        <div style="display:flex; gap:10px; margin-left:auto;">
+          <button id="topQrBtn" style="background:#2a1a6a; border:none; width:36px; height:36px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+            <i class="fas fa-qrcode"></i>
+          </button>
+          <button id="topEditBtn" style="background:#2a1a6a; border:none; width:36px; height:36px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+            <i class="fas fa-pen" style="font-size:13px;"></i>
+          </button>
         </div>
       </div>
 
-      <div class="profile-header">
-        <div class="avatar" id="profileAvatar">?</div>
-        <h3 id="profileName">User</h3>
-        <p id="profileUsername">@username</p>
-        <!-- REMOVED editProfileBtn and qrBtn - replaced by top icons -->
+      <!-- SCROLL AREA - MIDDLE SPACE SHOWS NAME ON SCROLL -->
+      <div id="profileScrollArea" style="overflow-y:auto; height:calc(100vh - 115px);">
+        <div class="profile-header" style="text-align:center; padding:20px 15px 10px 15px;">
+          <div class="avatar" id="profileAvatar" style="width:85px; height:85px; margin:0 auto; font-size:32px; background:linear-gradient(135deg,#5E35B1,#7C4DFF); border-radius:50%; display:flex; align-items:center; justify-content:center; color:white;">?</div>
+          <h3 id="profileName" style="margin:12px 0 4px 0;">User</h3>
+          <p id="profileUsername" style="opacity:0.6; font-size:14px;">@username</p>
+        </div>
+
+        <ul class="list settings-list">
+          <li data-setting="account">Account <i class="fas fa-chevron-right"></i></li>
+          <li data-setting="privacy">Privacy <i class="fas fa-chevron-right"></i></li>
+          <li data-setting="chats">Chats <i class="fas fa-chevron-right"></i></li>
+          <li data-setting="appearance">Appearance <i class="fas fa-chevron-right"></i></li>
+          <li data-setting="notifications">Notifications <i class="fas fa-chevron-right"></i></li>
+          <li data-setting="storage">Storage and Data <i class="fas fa-chevron-right"></i></li>
+          <li data-setting="help">Help & Feedback <i class="fas fa-chevron-right"></i></li>
+          <li data-setting="invite">Invite Contacts <i class="fas fa-chevron-right"></i></li>
+          <li data-setting="logout" class="danger">Log Out</li>
+        </ul>
       </div>
-      <ul class="list settings-list">
-        <li data-setting="account">Account <i class="fas fa-chevron-right"></i></li>
-        <li data-setting="privacy">Privacy <i class="fas fa-chevron-right"></i></li>
-        <li data-setting="chats">Chats <i class="fas fa-chevron-right"></i></li>
-        <li data-setting="appearance">Appearance <i class="fas fa-chevron-right"></i></li>
-        <li data-setting="notifications">Notifications <i class="fas fa-chevron-right"></i></li>
-        <li data-setting="storage">Storage and Data <i class="fas fa-chevron-right"></i></li>
-        <li data-setting="help">Help & Feedback <i class="fas fa-chevron-right"></i></li>
-        <li data-setting="invite">Invite Contacts <i class="fas fa-chevron-right"></i></li>
-        <li data-setting="logout" class="danger">Log Out</li>
-      </ul>
     </section>
   </main>
 
