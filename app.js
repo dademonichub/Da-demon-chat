@@ -217,7 +217,8 @@ $("#authBtn").onclick = async () => {
       const name = $("#authName").value.trim(); const username = $("#authUsername").value.trim().toLowerCase();
       if (!name || !username) return alert("Name & username required");
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      await setDoc(doc(db, "users", cred.user.uid), { uid: cred.user.uid, name, username, email, lang: selectedLang, about: "Hey there! I'm using DDchat.", avatar: name[0].toUpperCase(), createdAt: serverTimestamp() });
+      const ddId = Math.floor(10000000 + Math.random()*90000000).toString();
+      await setDoc(doc(db, "users", cred.user.uid), { uid: cred.user.uid, name, username, email, lang: selectedLang, about: "Hey there! I'm using DDchat.", avatar: name[0].toUpperCase(), ddId, phone:"", createdAt: serverTimestamp() });
     } else { await signInWithEmailAndPassword(auth, email, pass); }
   } catch (err) { alert(err.message); }
 };
@@ -229,7 +230,16 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
     const snap = await getDoc(doc(db, "users", user.uid));
-    if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase(); }
+    if (snap.exists()) { 
+      const d = snap.data();
+      $("#profileName").textContent = d.name;
+      $("#profileUsername").textContent = "@"+d.username;
+      $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase();
+      if(!d.ddId){
+        const ddId = Math.floor(10000000 + Math.random()*90000000).toString();
+        await updateDoc(doc(db,"users",user.uid),{ddId});
+      }
+    }
     showScreen("app"); loadChats(); loadGroups(); loadStatus(); loadCalls();
   } else {
     currentUser=null;
@@ -327,23 +337,6 @@ async function sendMessage(){
 }
 $("#chatBack").onclick=()=>showScreen("app");
 
-$("#editProfileBtn").onclick= async ()=>{
-  const snap=await getDoc(doc(db,"users",currentUser.uid)); const d=snap.data();
-  showModal("Edit Profile",`
-    <input id="editName" value="${d.name}" placeholder="Name" style="width:100%;margin:8px 0;padding:10px;border-radius:8px"/>
-    <input id="editAbout" value="${d.about}" placeholder="About" style="width:100%;margin:8px 0;padding:10px;border-radius:8px"/>
-    <button class="btn" id="saveProfile">Save</button>
-  `);
-  setTimeout(()=>{
-    $("#saveProfile").onclick= async ()=>{
-      const name=$("#editName").value.trim(); const about=$("#editAbout").value.trim();
-      await updateDoc(doc(db,"users",currentUser.uid),{name,about,avatar:name[0].toUpperCase()});
-      $("#profileName").textContent=name; $("#profileAvatar").textContent=name[0].toUpperCase();
-      $("#modal").classList.add("hidden"); alert("Profile updated!");
-    };
-  },100);
-};
-
 $("#postStatusBtn").onclick=()=>{
   showModal("Post Status",`<input id="statusText" placeholder="What's on your mind?" style="width:100%;padding:10px"/><button class="btn" id="saveStatus">Post</button>`);
   setTimeout(()=>{
@@ -379,16 +372,265 @@ function loadGroups(){
 
 function loadCalls(){ $("#callList").innerHTML="<li style='padding:15px;color:#8696a0'>No calls yet. Voice/video calling integration coming (use WebRTC).</li>"; }
 
-$("#qrBtn").onclick=()=>{ const url=`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${currentUser.uid}`; showModal("Your QR",`<img src="${url}" style="width:100%;border-radius:8px"/>`); };
-$("#cameraBtn").onclick=()=>{ $("#fileInput").click(); };
-$("#plusBtn").onclick=()=>{ showModal("New",`<button class="btn" onclick="document.getElementById('chatSearch').focus();document.getElementById('modal').classList.add('hidden')">💬 New Chat (search above)</button><br><br><button class="btn" id="newGroupModal">👥 New Group</button>`); setTimeout(()=>{ $("#newGroupModal").onclick=()=>{ $("#modal").classList.add("hidden"); $("#createGroupBtn").click(); }; },100); };
-$("#fileInput").onchange=(e)=>{ const file=e.target.files[0]; if(file) alert("File selected: "+file.name+" - upload to Firebase Storage coming next"); };
+// === NEW 3 ICONS - SAME COLOR AS APP - REPLACED ===
+$("#topSearchBtn")?.remove(); $("#topQrBtn")?.remove(); $("#topEditBtn")?.remove();
+
+// 1. SEARCH ICON - ONLY SETTINGS
+$("#topSearchBtn")?.addEventListener ? null : document.addEventListener("DOMContentLoaded",()=>{});
+if($("#topSearchBtn")==null){
+  const holder = document.querySelector("#topBar") || document.querySelector(".top") || document.body;
+}
+const topSearchBtn = document.getElementById("topSearchBtn");
+if(topSearchBtn){
+  topSearchBtn.onclick = ()=>{
+    showModal("Search Settings",`
+      <input id="settingsSearchInput" placeholder="Search settings" style="width:100%;padding:12px;border-radius:10px;border:1px solid #ddd"/>
+      <p style="margin-top:10px;color:#8696a0;font-size:13px">Type to filter settings below</p>
+    `);
+    setTimeout(()=>{
+      const inp=$("#settingsSearchInput");
+      if(inp){
+        inp.focus();
+        inp.oninput=(e)=>{
+          const term=e.target.value.toLowerCase();
+          $$(".settings-list li").forEach(li=>{
+            const txt=li.textContent.toLowerCase();
+            li.style.display= txt.includes(term) ? "" : "none";
+          });
+        };
+      }
+      const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en")translateApp(l);
+    },100);
+  };
+}
+
+// Better attach if elements exist in HTML - fallback attach directly
+if(document.getElementById("topSearchBtn")){
+  document.getElementById("topSearchBtn").onclick=()=>{
+    showModal("Search Settings",`<input id="settingsSearchInput" placeholder="Search settings" style="width:100%;padding:12px;border-radius:10px;border:1px solid #ddd"/>`);
+    setTimeout(()=>{
+      $("#settingsSearchInput").oninput=(e)=>{
+        const term=e.target.value.toLowerCase();
+        $$(".settings-list li").forEach(li=>{
+          li.style.display= li.textContent.toLowerCase().includes(term) ? "" : "none";
+        });
+      };
+    },100);
+  };
+}
+
+// SAFE GLOBAL HANDLERS FOR NEW TOP ICONS (works even if IDs created in HTML)
+document.addEventListener("click", async (e)=>{
+  // SEARCH
+  if(e.target.closest("#topSearchBtn")){
+    showModal("Search Settings",`
+      <input id="settingsSearchInput" placeholder="Search settings" style="width:100%;padding:12px;border-radius:10px;border:1px solid #ddd;margin-top:8px"/>
+    `);
+    setTimeout(()=>{
+      const inp=document.getElementById("settingsSearchInput");
+      if(inp){
+        inp.focus();
+        inp.oninput=(ev)=>{
+          const term=ev.target.value.toLowerCase();
+          document.querySelectorAll(".settings-list li").forEach(li=>{
+            li.style.display= li.textContent.toLowerCase().includes(term) ? "" : "none";
+          });
+        };
+      }
+      const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en")translateApp(l);
+    },80);
+  }
+
+  // QR CODE ICON - WITH 5 REAL FUNCTIONS
+  if(e.target.closest("#topQrBtn")){
+    if(!currentUser) return alert("Login first");
+    let snap=await getDoc(doc(db,"users",currentUser.uid));
+    let d=snap.data();
+    if(!d.ddId){
+      const ddId=Math.floor(10000000+Math.random()*90000000).toString();
+      await updateDoc(doc(db,"users",currentUser.uid),{ddId});
+      d.ddId=ddId;
+    }
+    const qrData = `DDCHAT:${d.uid}:${d.ddId}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}`;
+
+    showModal("QR Code",`
+      <div style="position:relative">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <button class="btn" id="scanLeftBtn" style="padding:8px 12px">📷 Scan</button>
+          <button class="btn" id="shareQrTopRight" style="padding:8px 12px">Share</button>
+        </div>
+        <div style="text-align:center">
+          <img id="qrImg" src="${qrUrl}" style="width:220px;height:220px;border-radius:12px;border:1px solid #eee"/>
+          <p style="margin:8px 0;font-weight:bold">${d.name}</p>
+          <small style="color:#8696a0">DD ID: ${d.ddId}</small>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <input type="file" id="qrUploadInput" accept="image/*" style="display:none"/>
+          <button class="btn" id="uploadQrBtn" style="flex:1">Upload QR Image</button>
+          <button class="btn" id="resetQrBtn" style="flex:1;background:#ff3b30;color:#fff">Reset Code</button>
+        </div>
+        <div id="qrResult" style="margin-top:10px;font-size:14px"></div>
+        <video id="qrVideo" style="width:100%;display:none;border-radius:12px;margin-top:10px" autoplay playsinline></video>
+        <canvas id="qrCanvas" style="display:none"></canvas>
+      </div>
+    `);
+
+    setTimeout(async ()=>{
+      const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en")translateApp(l);
+
+      // Share top right
+      document.getElementById("shareQrTopRight").onclick=async()=>{
+        const shareData={title:"My DDchat QR", text:`My DD ID: ${d.ddId}`, url: qrUrl};
+        if(navigator.share){
+          try{ await navigator.share(shareData); }catch{}
+        }else{
+          await navigator.clipboard.writeText(qrData);
+          alert("QR data copied: "+qrData);
+        }
+      };
+
+      // Go to account when scanned
+      async function handleScanned(text){
+        document.getElementById("qrResult").innerHTML="Scanned: "+escapeHtml(text);
+        if(text.includes("DDCHAT:")){
+          const parts=text.split(":");
+          const uid=parts[1];
+          if(uid && uid!==currentUser.uid){
+            const usnap=await getDoc(doc(db,"users",uid));
+            if(usnap.exists()){
+              const u=usnap.data();
+              document.getElementById("qrResult").innerHTML+=`<br><b>Found: ${u.name} (@${u.username})</b><br><button class="btn" id="goToAccount">Go to Account - Start Chat</button>`;
+              document.getElementById("goToAccount").onclick=()=>{ document.getElementById("modal").classList.add("hidden"); startChat(uid); };
+            }else{
+              document.getElementById("qrResult").innerHTML+="<br>User not found";
+            }
+          }
+        }else{
+          const q=query(collection(db,"users"), where("uid","==",text.trim()));
+          const s=await getDocs(q);
+          if(!s.empty){
+            s.forEach(docu=>{ const u=docu.data(); startChat(u.uid); document.getElementById("modal").classList.add("hidden"); });
+          }
+        }
+      }
+
+      // Upload scan left option
+      document.getElementById("uploadQrBtn").onclick=()=> document.getElementById("qrUploadInput").click();
+      document.getElementById("qrUploadInput").onchange=async(ev)=>{
+        const file=ev.target.files[0]; if(!file) return;
+        const fd=new FormData(); fd.append("file",file);
+        try{
+          const res=await fetch("https://api.qrserver.com/v1/read-qr-code/",{method:"POST",body:fd});
+          const json=await res.json();
+          const decoded=json[0]?.symbol[0]?.data;
+          if(decoded) handleScanned(decoded);
+          else document.getElementById("qrResult").textContent="Could not read QR";
+        }catch{ document.getElementById("qrResult").textContent="Scan failed"; }
+      };
+
+      // Camera scan left
+      document.getElementById("scanLeftBtn").onclick=async()=>{
+        const video=document.getElementById("qrVideo");
+        video.style.display="block";
+        try{
+          const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+          video.srcObject=stream;
+          const canvas=document.getElementById("qrCanvas");
+          const ctx=canvas.getContext("2d");
+          // Simple interval decode using api? Use BarcodeDetector if available
+          if("BarcodeDetector" in window){
+            const detector=new BarcodeDetector({formats:["qr_code"]});
+            const interval=setInterval(async()=>{
+              try{
+                const codes=await detector.detect(video);
+                if(codes.length){ clearInterval(interval); stream.getTracks().forEach(t=>t.stop()); video.style.display="none"; handleScanned(codes[0].rawValue); }
+              }catch{}
+            },500);
+          }else{
+            document.getElementById("qrResult").textContent="Camera opened - point at QR, then upload image if not detected. Your browser needs BarcodeDetector, use Upload as fallback.";
+          }
+        }catch(err){ document.getElementById("qrResult").textContent="Camera permission denied"; }
+      };
+
+      // Reset code
+      document.getElementById("resetQrBtn").onclick=async()=>{
+        const newDdId=Math.floor(10000000+Math.random()*90000000).toString();
+        await updateDoc(doc(db,"users",currentUser.uid),{ddId:newDdId});
+        const newData=`DDCHAT:${currentUser.uid}:${newDdId}`;
+        const newUrl=`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(newData)}`;
+        document.getElementById("qrImg").src=newUrl;
+        document.getElementById("qrResult").innerHTML=`New DD ID: ${newDdId} - QR reset done`;
+      };
+
+    },100);
+  }
+
+  // PENCIL ICON - EDIT PROFILE
+  if(e.target.closest("#topEditBtn")){
+    if(!currentUser) return;
+    let snap=await getDoc(doc(db,"users",currentUser.uid));
+    let d=snap.data();
+    if(!d.ddId){
+      const ddId=Math.floor(10000000+Math.random()*90000000).toString();
+      await updateDoc(doc(db,"users",currentUser.uid),{ddId});
+      d.ddId=ddId;
+    }
+    showModal("Edit Profile",`
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="text-align:center"><div class="avatar" id="editAvatarPreview" style="width:70px;height:70px;font-size:30px;margin:auto">${d.avatar || d.name[0]}</div>
+        <input type="file" id="photoInput" accept="image/*" style="margin-top:8px"/></div>
+        <label>Name</label>
+        <input id="editName" value="${escapeHtml(d.name)}" placeholder="Name" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd"/>
+        <label>About</label>
+        <textarea id="editAbout" placeholder="About" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd">${escapeHtml(d.about||"")}</textarea>
+        <label>Phone</label>
+        <input id="editPhone" value="${escapeHtml(d.phone||"")}" placeholder="Phone" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd"/>
+        <label>Email area</label>
+        <input id="editEmailArea" value="${escapeHtml(d.email||"")}" placeholder="Email" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd" disabled/>
+        <small style="color:#8696a0">Email cannot be changed - it's your login</small>
+        <label>DD ID</label>
+        <input id="editDdId" value="${d.ddId}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd;background:#f5f5f5" disabled/>
+        <small style="color:#8696a0">DD ID is random numbers only - system generated</small>
+        <button class="btn" id="saveProfileNew" style="margin-top:8px">Save Changes</button>
+      </div>
+    `);
+    setTimeout(()=>{
+      const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en")translateApp(l);
+      let newAvatarLetter = d.avatar;
+      document.getElementById("photoInput").onchange=(ev)=>{
+        const file=ev.target.files[0]; if(!file) return;
+        newAvatarLetter=file.name[0].toUpperCase();
+        document.getElementById("editAvatarPreview").textContent=newAvatarLetter;
+      };
+      document.getElementById("saveProfileNew").onclick=async()=>{
+        const name=document.getElementById("editName").value.trim();
+        const about=document.getElementById("editAbout").value.trim();
+        const phone=document.getElementById("editPhone").value.trim();
+        if(!name) return alert("Name required");
+        await updateDoc(doc(db,"users",currentUser.uid),{name, about, phone, avatar:newAvatarLetter || name[0].toUpperCase()});
+        document.getElementById("profileName").textContent=name;
+        document.getElementById("profileAvatar").textContent=newAvatarLetter || name[0].toUpperCase();
+        document.getElementById("modal").classList.add("hidden");
+        alert("Profile updated!");
+      };
+    },100);
+  }
+});
 
 $$(".settings-list li").forEach(li=>{
   li.onclick=()=>{
     const s=li.dataset.setting;
     if(s==="logout"){ signOut(auth); return; }
-    if(s==="account"){ $("#editProfileBtn").click(); return; }
+    if(s==="account"){
+      const btn=document.getElementById("topEditBtn");
+      if(btn) btn.click();
+      else {
+        document.dispatchEvent(new Event("click"));
+        document.querySelector("#topEditBtn")?.click();
+      }
+      return;
+    }
     showModal(li.textContent.trim(),"<p>"+s+" settings coming soon - built.</p>");
   };
 });
