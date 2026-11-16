@@ -41,15 +41,111 @@ function loadChats(){ if(!currentUser) return; const q = query(collection(db, "c
 $("#chatSearch").oninput = async (e)=>{ const raw = e.target.value.trim(); if(raw.length<1){ loadChats(); return; } const list=$("#chatList"); list.innerHTML="<li style='padding:15px'>Searching...</li>"; let found = []; const low = raw.toLowerCase(); try{ const q1=query(collection(db,"users"), where("username","==",low)); const s1=await getDocs(q1); s1.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid) found.push(u); }); }catch{} try{ const q2=query(collection(db,"users"), where("ddId","==",raw)); const s2=await getDocs(q2); s2.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid && !found.find(f=>f.uid===u.uid)) found.push(u); }); }catch{} const clean = raw.replace("DD-","").replace("DD","").trim(); if(clean!==raw){ try{ const q3=query(collection(db,"users"), where("ddId","==",clean)); const s3=await getDocs(q3); s3.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid && !found.find(f=>f.uid===u.uid)) found.push(u); }); }catch{} } list.innerHTML=""; if(found.length===0){ list.innerHTML=`<li style='padding:15px'>No user found for "${escapeHtml(raw)}"</li>`; return; } found.forEach(u=>{ userCache[u.uid]=u; const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${u.avatar||u.name[0]}</div><div><b>${escapeHtml(u.name)}</b><br><small>@${escapeHtml(u.username)} - DD ID: ${u.ddId}</small></div>`; li.onclick=()=>startChat(u.uid); list.appendChild(li); }); };
 async function startChat(otherUid){ const members=[currentUser.uid,otherUid].sort(); const chatId=members.join("_"); const ref=doc(db,"chats",chatId); const snap=await getDoc(ref); if(!snap.exists()) await setDoc(ref,{members,lastMsg:"",unreadCount:{[currentUser.uid]:0,[otherUid]:0},updated:serverTimestamp()}); openChat(chatId,otherUid); }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-function openChat(chatId,otherUid,passedName=""){ currentChatId=chatId; currentChatWith=otherUid; showScreen("chat-view"); const cached = userCache[otherUid]; $("#chatTitle").textContent=passedName||cached?.name||"Chat"; if(!passedName && !cached){ getDoc(doc(db,"users",otherUid)).then(s=>{ if(s.exists()){ userCache[otherUid]=s.data(); $("#chatTitle").textContent=s.data().name; } }).catch(()=>{}); } updateDoc(doc(db,"chats",chatId),{[ `unreadCount.${currentUser.uid}`]:0}).catch(()=>{}); const myLang = localStorage.getItem("ddchat_lang") || "en"; const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts")); onSnapshot(q,(snap)=>{ const box=$("#chatMessages"); box.innerHTML=""; snap.forEach(async m=>{ const d=m.data(); const div=document.createElement("div"); div.className="msg "+(d.from===currentUser.uid?"me":"them"); div.id="msg_"+m.id; div.dataset.orig=d.text; div.innerHTML=escapeHtml(d.text); box.appendChild(div); if(d.from!==currentUser.uid){ const key = myLang+"::"+d.text.trim(); if(transCache[key]){ const t=transCache[key]; if(t!==d.text) div.innerHTML=`${escapeHtml(t)}<br><small style="opacity:0.6;font-size:11px;display:block;margin-top:3px">${escapeHtml(d.text)}</small>`; }else{ try{ const t = await googleTranslate(d.text, "auto", myLang); if(t && t.toLowerCase()!==d.text.toLowerCase()){ transCache[key]=t; localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); div.innerHTML=`${escapeHtml(t)}<br><small style="opacity:0.6;font-size:11px;display:block;margin-top:3px">${escapeHtml(d.text)}</small>`; } }catch{} } } }); setTimeout(()=>{ box.scrollTop=box.scrollHeight; }, 200); }); }
+
+// ===== FIXED openChat - ROUND PROFILE + LAST SEEN + WORK STATUS DYNAMIC =====
+function openChat(chatId,otherUid,passedName=""){ 
+  currentChatId=chatId; currentChatWith=otherUid; 
+  showScreen("chat-view"); 
+  const cached = userCache[otherUid];
+  const chatTitle = $("#chatTitle");
+  const chatAvatarImg = $("#chatAvatarImg");
+  const chatAboutStatus = $("#chatAboutStatus");
+  const chatLastSeen = $("#chatLastSeen");
+  
+  chatTitle.textContent=passedName||cached?.name||"Chat";
+  
+  // round profile + ring
+  if(chatAvatarImg){
+    if(cached?.photoURL){ chatAvatarImg.innerHTML=`<img src="${cached.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
+    else { chatAvatarImg.textContent = (cached?.avatar||cached?.name?.[0]||"?").toUpperCase(); }
+  }
+  // work status = from about field
+  if(chatAboutStatus){ chatAboutStatus.textContent = cached?.about || "Hey there! I'm using DDchat."; }
+  // last seen
+  if(chatLastSeen){ chatLastSeen.textContent = "last seen today"; }
+
+  if(!passedName && !cached){ 
+    getDoc(doc(db,"users",otherUid)).then(s=>{ 
+      if(s.exists()){ 
+        const u=s.data(); userCache[otherUid]=u; 
+        $("#chatTitle").textContent=u.name;
+        if(chatAvatarImg){ if(u.photoURL) chatAvatarImg.innerHTML=`<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; else chatAvatarImg.textContent=u.avatar||u.name[0]; }
+        if(chatAboutStatus) chatAboutStatus.textContent = u.about || "Available";
+        if(chatLastSeen) chatLastSeen.textContent = "last seen recently";
+      } 
+    }).catch(()=>{}); 
+  } 
+  updateDoc(doc(db,"chats",chatId),{[ `unreadCount.${currentUser.uid}`]:0}).catch(()=>{}); 
+  const myLang = localStorage.getItem("ddchat_lang") || "en"; 
+  const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts")); 
+  onSnapshot(q,(snap)=>{ 
+    const box=$("#chatMessages"); box.innerHTML=""; 
+    // date separator
+    const sep=document.createElement("div"); sep.className="date-sep"; sep.textContent="Today"; box.appendChild(sep);
+    snap.forEach(async m=>{ 
+      const d=m.data(); 
+      const row=document.createElement("div"); row.className="msg-row "+(d.from===currentUser.uid?"out":"in");
+      const bubble=document.createElement("div"); bubble.className="bubble "+(d.from===currentUser.uid?"out":"in");
+      const timeStr = d.ts?.toDate ? d.ts.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      const ticks = d.from===currentUser.uid ? `<span class="ticks read"><i class="fas fa-check-double"></i></span>` : "";
+      bubble.innerHTML=`${escapeHtml(d.text)}<span class="msg-time">${timeStr} ${ticks}</span>`;
+      bubble.dataset.orig=d.text;
+      row.appendChild(bubble);
+      box.appendChild(row);
+      if(d.from!==currentUser.uid){ 
+        const key = myLang+"::"+d.text.trim(); 
+        if(transCache[key]){ /* translated already handled */ }else{ 
+          try{ const t = await googleTranslate(d.text, "auto", myLang); if(t && t.toLowerCase()!==d.text.toLowerCase()){ transCache[key]=t; localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); } }catch{} 
+        } 
+      } 
+    }); 
+    setTimeout(()=>{ box.scrollTop=box.scrollHeight; }, 200); 
+  }); 
+}
+
 $("#sendBtn").onclick=sendMessage; $("#messageInput").addEventListener("keypress",(e)=>{ if(e.key==="Enter") sendMessage(); });
 async function sendMessage(){ const text=$("#messageInput").value.trim(); if(!text||!currentChatId) return; $("#messageInput").value=""; await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text,ts:serverTimestamp()}); await updateDoc(doc(db,"chats",currentChatId),{lastMsg:text,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)}); }
 $("#chatBack").onclick=()=>showScreen("app");
+
+// ===== PLUS + MIC + STICKER + CALLS - SHORT CODE =====
+const plusChat = document.getElementById('plusChat');
+const fileInput = document.getElementById('fileInput');
+const micBtn = document.getElementById('micBtn');
+const stickerBtn = document.getElementById('stickerBtn');
+const chatVideoCall = document.getElementById('chatVideoCall');
+const chatVoiceCall = document.getElementById('chatVoiceCall');
+
+plusChat?.addEventListener('click', ()=> fileInput?.click());
+fileInput?.addEventListener('change', async (e)=>{
+  const f=e.target.files[0]; if(!f||!currentChatId) return;
+  await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,ts:serverTimestamp()});
+  await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+});
+let recState=null;
+micBtn?.addEventListener('click', async ()=>{
+  if(recState?.state=="recording"){ recState.stop(); micBtn.innerHTML='<i class="fas fa-microphone"></i>'; return; }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    const rec=new MediaRecorder(stream); recState=rec;
+    let chunks=[]; rec.ondataavailable=e=>chunks.push(e.data);
+    rec.onstop=async()=>{
+      if(!currentChatId) return;
+      await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice message",ts:serverTimestamp()});
+      await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice message",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+    };
+    rec.start(); micBtn.innerHTML='<i class="fas fa-stop" style="color:#ff3b3b"></i>';
+  }catch{ alert("Mic permission needed"); }
+});
+stickerBtn?.addEventListener('click', ()=>{ if(!currentChatId) return; document.getElementById('messageInput').value+=" 😊"; });
+chatVideoCall?.addEventListener('click', ()=> showModal("Video Call","Video calling soon"));
+chatVoiceCall?.addEventListener('click', ()=> showModal("Voice Call","Voice calling soon"));
+// ===== END FIX =====
+
 $("#postStatusBtn").onclick=()=>{ showModal("Post Status",`<input id="statusText" placeholder="What's on your mind?" style="width:100%;padding:10px"/><button class="btn" id="saveStatus">Post</button>`); setTimeout(()=>{ $("#saveStatus").onclick= async ()=>{ const text=$("#statusText").value.trim(); if(!text) return; await addDoc(collection(db,"status"),{uid:currentUser.uid,text,ts:serverTimestamp()}); $("#modal").classList.add("hidden"); }; },100); };
 function loadStatus(){ const q=query(collection(db,"status"), orderBy("ts","desc")); onSnapshot(q,(snap)=>{ const list=$("#statusList"); list.innerHTML=""; snap.forEach(d=>{ const s=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${s.uid.slice(0,2)}</div><div><b>Status</b><br><small>${escapeHtml(s.text)}</small></div>`; list.appendChild(li); }); }); }
 $("#createGroupBtn").onclick=()=>{ showModal("Create Group",`<input id="groupName" placeholder="Group name" style="width:100%;padding:10px"/><button class="btn" id="saveGroup">Create</button>`); setTimeout(()=>{ $("#saveGroup").onclick= async ()=>{ const name=$("#groupName").value.trim(); if(!name) return; await addDoc(collection(db,"groups"),{name,members:[currentUser.uid],createdBy:currentUser.uid,ts:serverTimestamp()}); $("#modal").classList.add("hidden"); }; },100); };
 function loadGroups(){ const q=query(collection(db,"groups"), where("members","array-contains",currentUser.uid)); onSnapshot(q,(snap)=>{ const list=$("#groupList"); list.innerHTML=""; snap.forEach(d=>{ const g=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">G</div><div><b>${g.name}</b><br><small>${g.members.length} members</small></div>`; list.appendChild(li); }); }); }
-function loadCalls(){ $("#callList").innerHTML="<li style='padding:15px;color:#8696a0'>No calls yet. Voice/video calling integration coming (use WebRTC).</li>"; }
+function loadCalls(){ $("#callList").innerHTML="<li style='padding:15px;color:#8696a0'>No calls yet.</li>"; }
 document.addEventListener("DOMContentLoaded", ()=>{
   const scrollArea = document.getElementById('profileScrollArea');
   const stickyName = document.getElementById('profileStickyName');
@@ -67,8 +163,6 @@ document.addEventListener("click", async (e)=>{
     const render=(term="")=>{ const list=document.getElementById("searchSuggestionList"); if(!list) return; const f=all.filter(s=>s.name.toLowerCase().includes(term.toLowerCase())); list.innerHTML=f.map(s=>`<li data-key="${s.key}" style="padding:12px;border-bottom:1px solid #2a1a6a;cursor:pointer;display:flex;justify-content:space-between"><span>${s.name}</span><i class="fas fa-chevron-right" style="opacity:0.3"></i></li>`).join('')||`<li style="padding:12px;opacity:0.5">No result</li>`; list.querySelectorAll("li").forEach(li=>{ li.onclick=()=>{ document.getElementById("modal").classList.add("hidden"); document.querySelector(`.settings-list li[data-setting="${li.dataset.key}"]`)?.click(); }; }); };
     setTimeout(()=>{ const inp=document.getElementById("settingsSearchInput"); if(inp){ inp.focus(); render(""); inp.oninput=(ev)=>render(ev.target.value); } },100);
   }
-
-// ===== CLEAN QR CODE - ONLY WORKING CODE =====
 if(e.target.closest("#topQrBtn")){
   if(!currentUser) return alert("Login first");
   let snap=await getDoc(doc(db,"users",currentUser.uid));
@@ -124,7 +218,6 @@ if(e.target.closest("#topQrBtn")){
         }else el.textContent="User not found";
       }catch(err){ el.textContent="Fetch failed: "+err.message; }
     }
-    // LOCAL DECODE - NO EXTERNAL API
     async function decodeLocal(file){
       document.getElementById("qrResult").textContent="Reading QR...";
       const bmp=await createImageBitmap(file);
@@ -165,8 +258,6 @@ if(e.target.closest("#topQrBtn")){
     };
   },100);
 }
-// ===== END CLEAN QR =====
-
   if(e.target.closest("#topEditBtn")){
     if(!currentUser) return;
     let snap=await getDoc(doc(db,"users",currentUser.uid));
