@@ -7,11 +7,13 @@ import {
   getFirestore, collection, addDoc, onSnapshot, query, where,
   orderBy, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment
 } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 let currentUser = null;
 let currentChatId = null;
@@ -236,8 +238,13 @@ onAuthStateChanged(auth, async (user) => {
       $("#profileName").textContent = d.name;
       $("#profileUsername").textContent = "@"+d.username;
       const av = $("#profileAvatar");
-      if(d.photoURL){ av.innerHTML = `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
-      else { av.textContent = d.avatar || d.name[0].toUpperCase(); }
+      if(d.photoURL){ 
+        av.innerHTML = `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+        av.dataset.full = d.photoURL;
+      } else { 
+        av.textContent = d.avatar || d.name[0].toUpperCase();
+        av.dataset.full = "";
+      }
       const sticky = document.getElementById("profileStickyName");
       if(sticky) sticky.textContent = d.name;
       if(!d.ddId){
@@ -265,19 +272,58 @@ $$("#bottomnav button").forEach(btn => {
   };
 });
 
+// === FIX 2 FUNCTIONS FOR YOUR 2 ISSUES ===
+// ISSUE 1 FIX: BIG PHOTO VIEW WITH BACK ARROW
+function openFullPhoto(url){
+  if(!url) return;
+  showModal("Photo",`
+    <div style="position:fixed;inset:0;background:#000;z-index:99999;display:flex;flex-direction:column">
+      <div style="padding:15px;display:flex;align-items:center;background:#111">
+        <button id="photoBackBtn" style="background:#333;border:none;width:42px;height:42px;border-radius:50%;color:white;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer">←</button>
+        <span style="color:white;margin-left:15px;font-weight:bold">Profile Photo</span>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;background:black;padding:10px">
+        <img src="${url}" style="max-width:100%;max-height:85vh;object-fit:contain;border-radius:8px"/>
+      </div>
+    </div>
+  `);
+  setTimeout(()=>{
+    const btn=document.getElementById("photoBackBtn");
+    if(btn) btn.onclick=()=>$("#modal").classList.add("hidden");
+  },50);
+}
+
+// ISSUE 2 FIX: SHOW REAL NAME AND REAL PHOTO NOT "Chat"
 function loadChats(){
   if(!currentUser) return;
   const q = query(collection(db, "chats"), where("members","array-contains",currentUser.uid));
-  onSnapshot(q,(snap)=>{
+  onSnapshot(q, async(snap)=>{
     const list=$("#chatList"); list.innerHTML="";
     if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username or DD ID above to start.</li>"; return; }
-    snap.forEach(d=>{
-      const data=d.data();
+    for(const chatDoc of snap.docs){
+      const data=chatDoc.data();
+      const otherUid=data.members.find(m=>m!==currentUser.uid);
+      if(!otherUid) continue;
+      let opponentName="DD User";
+      let opponentLetter="U";
+      let opponentPhoto="";
+      try{
+        const usnap=await getDoc(doc(db,"users",otherUid));
+        if(usnap.exists()){
+          const u=usnap.data();
+          opponentName=u.name||"DD User";
+          opponentLetter=u.avatar||u.name?.[0]?.toUpperCase()||"U";
+          opponentPhoto=u.photoURL||"";
+        }
+      }catch{}
       const unread = data.unreadCount?.[currentUser.uid] || 0;
       const li=document.createElement("li");
-      li.innerHTML=`<div class="avatar">${(data.lastMsg||"D")[0].toUpperCase()}</div><div style="flex:1"><b>Chat</b><br><small>${data.lastMsg||"Start chatting"}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`;
-      li.onclick=()=>openChat(d.id,data.members.find(m=>m!==currentUser.uid)); list.appendChild(li);
-    });
+      li.style.display="flex"; li.style.alignItems="center"; li.style.gap="12px"; li.style.padding="12px"; li.style.borderBottom="1px solid rgba(255,255,255,0.06)"; li.style.cursor="pointer";
+      const avatarHtml = opponentPhoto ? `<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0"><img src="${opponentPhoto}" style="width:100%;height:100%;object-fit:cover"></div>` : `<div class="avatar" style="width:48px;height:48px;flex-shrink:0">${opponentLetter}</div>`;
+      li.innerHTML=`${avatarHtml}<div style="flex:1;min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(opponentName)}</b><small style="color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${escapeHtml(data.lastMsg||"Start chatting")}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`;
+      li.onclick=()=>openChat(chatDoc.id,otherUid,opponentName); 
+      list.appendChild(li);
+    }
   });
 }
 
@@ -306,9 +352,15 @@ async function startChat(otherUid){
 
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
-function openChat(chatId,otherUid){
+function openChat(chatId,otherUid,passedName=""){
   currentChatId=chatId; currentChatWith=otherUid; showScreen("chat-view");
-  $("#chatTitle").textContent="Chat";
+  $("#chatTitle").textContent=passedName||"Chat";
+  // ALSO FETCH REAL NAME FOR CHAT HEADER IF NOT PASSED
+  if(!passedName){
+    getDoc(doc(db,"users",otherUid)).then(s=>{
+      if(s.exists()) $("#chatTitle").textContent=s.data().name;
+    }).catch(()=>{});
+  }
   updateDoc(doc(db,"chats",chatId),{[ `unreadCount.${currentUser.uid}`]:0}).catch(()=>{});
   const myLang = localStorage.getItem("ddchat_lang") || "en";
   const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts"));
@@ -388,8 +440,16 @@ document.addEventListener("DOMContentLoaded", ()=>{
   }
 });
 
-// SAFE GLOBAL HANDLERS FOR NEW TOP ICONS - ALL 6 ISSUES FIXED
+// SAFE GLOBAL HANDLERS FOR NEW TOP ICONS
 document.addEventListener("click", async (e)=>{
+
+  // CLICK PROFILE AVATAR TO VIEW BIG - ISSUE 1
+  if(e.target.closest("#profileAvatar")){
+    const av=$("#profileAvatar");
+    const img=av.querySelector("img");
+    const url=av.dataset.full || (img ? img.src : "");
+    if(url) openFullPhoto(url);
+  }
 
   // FIX 1: SEARCH WITH SUGGESTION SURFACE
   if(e.target.closest("#topSearchBtn")){
@@ -500,7 +560,7 @@ document.addEventListener("click", async (e)=>{
     },100);
   }
 
-  // FIX 5: PROFILE PHOTO APPEAR AND SAVE
+  // FIX FOR ANY SIZE PHOTO + BIG VIEW - ISSUE 1
   if(e.target.closest("#topEditBtn")){
     if(!currentUser) return;
     let snap=await getDoc(doc(db,"users",currentUser.uid));
@@ -508,8 +568,10 @@ document.addEventListener("click", async (e)=>{
     if(!d.ddId){ const ddId=Math.floor(10000000+Math.random()*90000000).toString(); await updateDoc(doc(db,"users",currentUser.uid),{ddId}); d.ddId=ddId; }
     showModal("Edit Profile",`
       <div style="display:flex;flex-direction:column;gap:10px">
-        <div style="text-align:center"><div class="avatar" id="editAvatarPreview" style="width:70px;height:70px;font-size:30px;margin:auto;overflow:hidden;background:#5E35B1;color:white;display:flex;align-items:center;justify-content:center;border-radius:50%">${d.photoURL?`<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover">`:(d.avatar||d.name[0])}</div>
-        <input type="file" id="photoInput" accept="image/*" style="margin-top:8px"/><br><small style="opacity:0.6">Photo will appear instantly</small></div>
+        <div style="text-align:center">
+          <div class="avatar" id="editAvatarPreview" style="width:70px;height:70px;font-size:30px;margin:auto;overflow:hidden;background:#5E35B1;color:white;display:flex;align-items:center;justify-content:center;border-radius:50%;cursor:pointer" title="Click to view big">${d.photoURL?`<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover">`:(d.avatar||d.name[0])}</div>
+          <input type="file" id="photoInput" accept="image/*" style="margin-top:8px"/><br><small style="opacity:0.6">Any size allowed - click photo to view big</small>
+        </div>
         <label>Name</label><input id="editName" value="${escapeHtml(d.name)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd"/>
         <label>About</label><textarea id="editAbout" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd">${escapeHtml(d.about||"")}</textarea>
         <label>Phone</label><input id="editPhone" value="${escapeHtml(d.phone||"")}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd"/>
@@ -519,15 +581,21 @@ document.addEventListener("click", async (e)=>{
       </div>
     `);
     setTimeout(()=>{
-      let newPhotoBase64 = d.photoURL || null;
-      let newAvatarLetter = d.avatar;
+      let selectedFile = null;
+      let previewUrl = d.photoURL || "";
+      
+      document.getElementById("editAvatarPreview").onclick=()=>{
+        if(previewUrl) openFullPhoto(previewUrl);
+      };
+      
       document.getElementById("photoInput").onchange=(ev)=>{
         const file=ev.target.files[0]; if(!file) return;
-        const reader=new FileReader();
-        reader.onload=(e)=>{ newPhotoBase64=e.target.result; document.getElementById("editAvatarPreview").innerHTML=`<img src="${newPhotoBase64}" style="width:100%;height:100%;object-fit:cover">`; };
-        reader.readAsDataURL(file);
-        newAvatarLetter=file.name[0].toUpperCase();
+        selectedFile=file;
+        previewUrl=URL.createObjectURL(file);
+        document.getElementById("editAvatarPreview").innerHTML=`<img src="${previewUrl}" style="width:100%;height:100%;object-fit:cover">`;
+        document.getElementById("editStatus").textContent=`Selected: ${file.name} (${(file.size/1024/1024).toFixed(2)}MB) - Any size OK`;
       };
+      
       document.getElementById("saveProfileNew").onclick=async()=>{
         const name=document.getElementById("editName").value.trim();
         const about=document.getElementById("editAbout").value.trim();
@@ -535,15 +603,22 @@ document.addEventListener("click", async (e)=>{
         if(!name) return alert("Name required");
         document.getElementById("editStatus").textContent="Saving...";
         try{
-          const updateData={name, about, phone, avatar:newAvatarLetter||name[0].toUpperCase()};
-          if(newPhotoBase64) updateData.photoURL=newPhotoBase64;
-          await updateDoc(doc(db,"users",currentUser.uid),updateData);
+          let photoURL=d.photoURL||"";
+          if(selectedFile){
+            document.getElementById("editStatus").textContent="Uploading any size photo...";
+            const storageRef=ref(storage, `profiles/${currentUser.uid}/${Date.now()}_${selectedFile.name}`);
+            await uploadBytes(storageRef, selectedFile);
+            photoURL=await getDownloadURL(storageRef);
+          }
+          await updateDoc(doc(db,"users",currentUser.uid),{name, about, phone, avatar:name[0].toUpperCase(), photoURL});
           document.getElementById("profileName").textContent=name;
           const av=document.getElementById("profileAvatar");
-          if(newPhotoBase64){ av.innerHTML=`<img src="${newPhotoBase64}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
-          else { av.textContent=newAvatarLetter||name[0].toUpperCase(); }
+          if(photoURL){ 
+            av.innerHTML=`<img src="${photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+            av.dataset.full=photoURL;
+          }
           const sticky=document.getElementById("profileStickyName"); if(sticky) sticky.textContent=name;
-          document.getElementById("editStatus").textContent="Saved!";
+          document.getElementById("editStatus").textContent="Saved! ✓";
           setTimeout(()=>document.getElementById("modal").classList.add("hidden"),800);
         }catch(err){ document.getElementById("editStatus").textContent="Save failed: "+err.message; }
       };
