@@ -62,13 +62,12 @@
 
 <!-- ================= MAIN APP ================= -->
 <div id="app" class="screen">
-  <!-- Top Bar -->
+  <!-- Top Bar - CLEAN, NO CAMERA, NO PLUS -->
   <header id="topbar">
     <div id="topLeft" class="icon-btn"><i class="fas fa-ellipsis-v"></i></div>
     <div id="topTitle">DDchat</div>
     <div class="top-right">
-      <div id="cameraBtn" class="icon-btn"><i class="fas fa-camera"></i></div>
-      <div id="plusBtn" class="icon-btn"><i class="fas fa-plus"></i></div>
+      <!-- REMOVED cameraBtn and plusBtn -->
     </div>
   </header>
 
@@ -94,14 +93,21 @@
     </section>
 
     <section id="page-profile" class="page">
+      <!-- PROFILE HEADER WITH 3 NEW ICONS ONLY HERE -->
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; background:#1e1250;">
+        <h3 style="margin:0;">Profile</h3>
+        <div id="topBar" style="display:flex; gap:14px; align-items:center;">
+          <button id="topSearchBtn" class="icon-btn" style="background:#2a1a6a;"><i class="fas fa-search"></i></button>
+          <button id="topQrBtn" class="icon-btn" style="background:#2a1a6a;"><i class="fas fa-qrcode"></i></button>
+          <button id="topEditBtn" class="icon-btn" style="background:#2a1a6a;"><i class="fas fa-pen"></i></button>
+        </div>
+      </div>
+
       <div class="profile-header">
         <div class="avatar" id="profileAvatar">?</div>
         <h3 id="profileName">User</h3>
         <p id="profileUsername">@username</p>
-        <div class="profile-actions">
-          <button class="btn small" id="editProfileBtn">Edit Profile</button>
-          <button class="btn small" id="qrBtn">QR Code</button>
-        </div>
+        <!-- REMOVED editProfileBtn and qrBtn - replaced by top icons -->
       </div>
       <ul class="list settings-list">
         <li data-setting="account">Account <i class="fas fa-chevron-right"></i></li>
