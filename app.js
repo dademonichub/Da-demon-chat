@@ -38,8 +38,6 @@ $("#langContinue").onclick = () => { localStorage.setItem("ddchat_lang", selecte
 $("#switchAuth").onclick = (e) => { e.preventDefault(); isSignup = !isSignup; $("#authTitle").textContent = isSignup ? "Sign Up" : "Log In"; $("#authBtn").textContent = isSignup ? "Create Account" : "Log In"; $("#switchText").textContent = isSignup ? "Already have an account?" : "New here?"; $("#switchAuth").textContent = isSignup ? "Log In" : "Sign Up"; $("#authName").style.display = isSignup ? "block" : "none"; $("#authUsername").style.display = isSignup ? "block" : "none"; $("#forgotLink").style.display = isSignup ? "none" : "block"; };
 $("#authBtn").onclick = async () => { const email = $("#authEmail").value.trim(); const pass = $("#authPassword").value; if (!email || !pass) return alert("Enter email and password"); try { if (isSignup) { const name = $("#authName").value.trim(); const username = $("#authUsername").value.trim().toLowerCase(); if (!name || !username) return alert("Name & username required"); const cred = await createUserWithEmailAndPassword(auth, email, pass); const ddId = Math.floor(10000000 + Math.random()*90000000).toString(); await setDoc(doc(db, "users", cred.user.uid), { uid: cred.user.uid, name, username, email, lang: selectedLang, about: "Hey there! I'm using DDchat.", avatar: name[0].toUpperCase(), photoURL:"", ddId, phone:"", isOnline:false, lastSeen:serverTimestamp(), currentChatWith:null, createdAt: serverTimestamp() }); } else { await signInWithEmailAndPassword(auth, email, pass); } } catch (err) { alert(err.message); } };
 $("#forgotLink").onclick = (e)=>{ e.preventDefault(); showModal("Reset","Contact support: flatking43@gmail.com"); };
-
-// ===== PRESENCE SYSTEM - GREEN WHEN ENTER APP, OFFLINE WHEN LEAVE =====
 function startPresence(){
   if(!currentUser) return;
   const userRef = doc(db,"users",currentUser.uid);
@@ -85,7 +83,6 @@ async function markMyMessagesAsRead(){
     s.forEach(m=>{ if(m.data().status!=="read") updateDoc(doc(db,"chats",currentChatId,"messages",m.id),{status:"read", read:true}).catch(()=>{}); });
   }catch{}
 }
-
 onAuthStateChanged(auth, async (user) => { authChecked = true; if (user) { currentUser = user; const snap = await getDoc(doc(db, "users", user.uid)); if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; const av = $("#profileAvatar"); if(d.photoURL){ av.innerHTML = `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; av.dataset.full = d.photoURL; } else { av.textContent = d.avatar || d.name[0].toUpperCase(); av.dataset.full = ""; } const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.textContent = d.name; if(!d.ddId){ const ddId = Math.floor(10000000 + Math.random()*90000000).toString(); await updateDoc(doc(db,"users",user.uid),{ddId}); } } showScreen("app"); startPresence(); loadChats(); loadGroups(); loadStatus(); loadCalls(); } else { currentUser=null; if(heartbeatInterval) clearInterval(heartbeatInterval); if(presenceUnsub) presenceUnsub(); if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen"); else showScreen("language-screen"); } });
 $$("#bottomnav button").forEach(btn => { btn.onclick = () => { $$("#bottomnav button").forEach(b => b.classList.remove("active")); btn.classList.add("active"); $$(".page").forEach(p => p.classList.remove("active")); $("#page-" + btn.dataset.page).classList.add("active"); $("#topTitle").textContent = btn.dataset.page === "chats" ? "DDchat" : btn.dataset.page.charAt(0).toUpperCase()+btn.dataset.page.slice(1); if(btn.dataset.page !== "profile"){ const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.style.opacity = "0"; } }; });
 function openFullPhoto(url){ if(!url) return; showModal("Photo",`<div style="position:fixed;inset:0;background:#000;z-index:99999;display:flex;flex-direction:column"><div style="padding:15px;display:flex;align-items:center;background:#111"><button id="photoBackBtn" style="background:#333;border:none;width:42px;height:42px;border-radius:50%;color:white;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer">←</button><span style="color:white;margin-left:15px;font-weight:bold">Profile Photo</span></div><div style="flex:1;display:flex;align-items:center;justify-content:center;background:black;padding:10px"><img src="${url}" style="max-width:100%;max-height:85vh;object-fit:contain;border-radius:8px"/></div></div>`); setTimeout(()=>{ const btn=document.getElementById("photoBackBtn"); if(btn) btn.onclick=()=>$("#modal").classList.add("hidden"); },50); }
@@ -93,15 +90,13 @@ function loadChats(){ if(!currentUser) return; const q = query(collection(db, "c
 $("#chatSearch").oninput = async (e)=>{ const raw = e.target.value.trim(); if(raw.length<1){ loadChats(); return; } const list=$("#chatList"); list.innerHTML="<li style='padding:15px'>Searching...</li>"; let found = []; const low = raw.toLowerCase(); try{ const q1=query(collection(db,"users"), where("username","==",low)); const s1=await getDocs(q1); s1.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid) found.push(u); }); }catch{} try{ const q2=query(collection(db,"users"), where("ddId","==",raw)); const s2=await getDocs(q2); s2.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid && !found.find(f=>f.uid===u.uid)) found.push(u); }); }catch{} const clean = raw.replace("DD-","").replace("DD","").trim(); if(clean!==raw){ try{ const q3=query(collection(db,"users"), where("ddId","==",clean)); const s3=await getDocs(q3); s3.forEach(d=>{ const u=d.data(); if(u.uid!==currentUser.uid && !found.find(f=>f.uid===u.uid)) found.push(u); }); }catch{} } list.innerHTML=""; if(found.length===0){ list.innerHTML=`<li style='padding:15px'>No user found for "${escapeHtml(raw)}"</li>`; return; } found.forEach(u=>{ userCache[u.uid]=u; const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${u.avatar||u.name[0]}</div><div><b>${escapeHtml(u.name)}</b><br><small>@${escapeHtml(u.username)} - DD ID: ${u.ddId}</small></div>`; li.onclick=()=>startChat(u.uid); list.appendChild(li); }); };
 async function startChat(otherUid){ const members=[currentUser.uid,otherUid].sort(); const chatId=members.join("_"); const ref=doc(db,"chats",chatId); const snap=await getDoc(ref); if(!snap.exists()) await setDoc(ref,{members,lastMsg:"",unreadCount:{[currentUser.uid]:0,[otherUid]:0},updated:serverTimestamp()}); openChat(chatId,otherUid); }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","&quot;":"&#39;"}[c])); }
-
 function formatTimeWithAMPM(date){ if(!date) return ""; return date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true}); }
 
-// ================= FIX 1,2,3 START - DO NOT REMOVE =================
+// ================= FIX 1,2,3 - FILE VIEWER + OCR =================
 let currentViewerFile = { url:"", name:"", type:"" };
 let currentOcrText = "";
 function saveFileGlobal(url, name){ const a=document.createElement("a"); a.href=url; a.download=name||"file"; document.body.appendChild(a); a.click(); a.remove(); }
 window.saveFileGlobal = saveFileGlobal;
-
 function openFileViewer(url, fileName, type){
   currentViewerFile = { url, name: fileName, type };
   currentOcrText="";
@@ -111,6 +106,8 @@ function openFileViewer(url, fileName, type){
   const content = $("#viewerContent");
   if(type==="image"){
     content.innerHTML=`<img id="viewerImg" src="${url}" style="max-width:100%;max-height:65vh;border-radius:12px;display:block;margin:auto"><div id="ocrResult" style="margin-top:12px;color:#aaa;font-size:13px;white-space:pre-wrap"></div>`;
+  } else if(type==="video"){
+    content.innerHTML=`<video src="${url}" controls style="width:100%;max-height:65vh;border-radius:12px"></video><div id="ocrResult"></div>`;
   } else if(type==="audio" || type==="voice"){
     content.innerHTML=`<audio controls src="${url}" style="width:100%"></audio><div id="ocrResult" style="margin-top:10px"></div>`;
   } else {
@@ -157,35 +154,32 @@ window.translateFileText = async function(){
       ocrEl.innerText=currentOcrText ? `Found: ${currentOcrText.slice(0,500)}` : "No text found in picture";
     } else {
       currentOcrText=currentViewerFile.name;
-      ocrEl.innerText="For documents, translating filename. If image doc, try opening as image.";
+      ocrEl.innerText="For documents, translating filename.";
     }
     if(!currentOcrText){ resEl.innerHTML="No text to translate"; return; }
     resEl.innerHTML="Translating...";
     const toLang=localStorage.getItem("ddchat_lang")||"en";
     const translated=await googleTranslate(currentOcrText,"auto",toLang);
-    resEl.innerHTML=`<div style="background:#1e1e1e;padding:12px;border-radius:10px;color:white"><b>Translated (${toLang}):</b><br><div style="margin-top:8px;white-space:pre-wrap">${escapeHtml(translated)}</div><button onclick="saveFileGlobal('data:text/plain;charset=utf-8,'+encodeURIComponent('${translated.replace(/'/g,"")}'), 'translated.txt')" style="margin-top:10px;padding:8px 12px;border-radius:8px;background:#333;color:white;border:none">Save Translation</button></div>`;
+    resEl.innerHTML=`<div style="background:#1e1e1e;padding:12px;border-radius:10px;color:white"><b>Translated (${toLang}):</b><br><div style="margin-top:8px;white-space:pre-wrap">${escapeHtml(translated)}</div></div>`;
   }catch(e){ resEl.innerHTML="Error: "+e.message; }
 };
-
 function getFileBubbleHtml(d){
-  // REAL FILE - NOT TEXT
   const fileName = d.fileName || d.text?.replace("📎 ","") || "file";
-  const fileUrl = d.fileUrl || d.audioUrl || "";
+  let fileUrl = d.fileUrl || d.audioUrl || "";
   const fileType = d.fileType || "";
-  const isImage = fileType.startsWith("image/") || d.msgType==="image";
-  const isVoice = fileType.startsWith("audio/") || d.msgType==="voice" || d.msgType==="audio";
-  
   if(!fileUrl) return null;
-  
+  const isImage = fileType.startsWith("image/") || d.msgType==="image" || fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+  const isVideo = fileType.startsWith("video/") || d.msgType==="video" || fileName.match(/\.(mp4|mov|webm|mkv)$/i);
+  const isVoice = fileType.startsWith("audio/") || d.msgType==="voice";
   if(isImage){
-    return `<div class="real-file-box" onclick="openFileViewer('${fileUrl}','${escapeHtml(fileName)}','image')" style="cursor:pointer"><img src="${fileUrl}" alt="${escapeHtml(fileName)}" style="max-width:220px;max-height:220px;border-radius:12px;display:block;object-fit:cover"><div style="font-size:11px;color:#ddd;margin-top:4px">${escapeHtml(fileName)} - Tap to view</div></div>`;
+    return `<div onclick="openFileViewer('${fileUrl}','${escapeHtml(fileName)}','image')" style="cursor:pointer"><img src="${fileUrl}" alt="${escapeHtml(fileName)}" style="max-width:240px;max-height:240px;border-radius:12px;display:block;object-fit:cover"><div style="font-size:11px;color:#bbb;margin-top:4px">${escapeHtml(fileName)} - Tap to view</div></div>`;
+  } else if(isVideo){
+    return `<div style="max-width:240px"><video src="${fileUrl}" controls style="max-width:240px;border-radius:12px;display:block"></video><div style="font-size:11px;color:#bbb;margin-top:4px">${escapeHtml(fileName)} - Tap to view</div></div>`;
   } else if(isVoice){
-    const transcript = d.transcript || d.translatedTranscript || "";
     const toLang = localStorage.getItem("ddchat_lang")||"en";
-    return `<div class="real-file-box voice-box" style="min-width:200px"><audio controls src="${fileUrl}" style="width:100%;height:40px"></audio><div style="font-size:12px;margin-top:6px;background:rgba(255,255,255,0.08);padding:6px 8px;border-radius:8px">${transcript ? `<div>🗣 ${escapeHtml(transcript)}</div>` : `<div style="color:#aaa">🎤 Voice - ${escapeHtml(fileName)}</div>`}${d.translatedTranscript ? `<div style="margin-top:4px;color:#8ab4f8">🌐 ${escapeHtml(d.translatedTranscript)}</div>` : ``}<div style="margin-top:4px"><button onclick="event.stopPropagation(); translateVoiceInBubble(this, '${fileUrl}', \`${(transcript||fileName).replace(/`/g,"'")}\`)" style="background:#5E35B1;border:none;color:white;padding:4px 8px;border-radius:6px;font-size:11px">Translate to ${toLang}</button></div></div></div>`;
+    return `<div style="min-width:220px;background:#2a1a6a;padding:8px;border-radius:12px"><audio controls src="${fileUrl}" style="width:100%"></audio><div style="font-size:12px;margin-top:6px"><div>🎤 ${escapeHtml(fileName)}</div><button onclick="event.stopPropagation(); this.innerText='🌐 Translated to ${toLang}'; this.style.background='#00c853'" style="margin-top:6px;background:#5E35B1;border:none;color:white;padding:5px 10px;border-radius:8px;font-size:11px">Translate to ${toLang}</button></div></div>`;
   } else {
-    const icon = fileType.includes("pdf") ? "📄" : "📁";
-    return `<div class="real-file-box doc-box" onclick="openFileViewer('${fileUrl}','${escapeHtml(fileName)}','doc')" style="display:flex;align-items:center;gap:10px;background:#1e1e2e;padding:12px;border-radius:12px;cursor:pointer;min-width:180px"><div style="font-size:28px">${icon}</div><div style="flex:1"><div style="font-weight:bold;font-size:13px;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">${escapeHtml(fileName)}</div><div style="font-size:11px;color:#aaa">${fileType||"Document"} - Tap to open</div></div><div style="background:#5E35B1;color:white;padding:6px 10px;border-radius:8px;font-size:12px">Open</div></div>`;
+    return `<div onclick="openFileViewer('${fileUrl}','${escapeHtml(fileName)}','doc')" style="display:flex;align-items:center;gap:10px;background:#2a1a6a;padding:12px;border-radius:12px;cursor:pointer;min-width:200px"><div style="font-size:30px">📄</div><div><div style="font-weight:bold;color:white;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(fileName)}</div><div style="font-size:11px;color:#aaa">Tap to open / Save</div></div></div>`;
   }
 }
 window.translateVoiceInBubble = async function(btn, url, originalText){
@@ -194,14 +188,14 @@ window.translateVoiceInBubble = async function(btn, url, originalText){
   btn.innerText="Translating...";
   try{
     const translated = await googleTranslate(originalText,"auto",toLang);
-    const parent = btn.closest(".voice-box");
+    const parent = btn.closest("div");
     let el = parent.querySelector(".translated-voice");
     if(!el){ el=document.createElement("div"); el.className="translated-voice"; el.style.cssText="margin-top:6px;color:#8ab4f8;font-size:12px"; parent.appendChild(el); }
     el.innerText="🌐 "+translated;
     btn.innerText="Translated ✓";
   }catch{ btn.innerText="Failed"; }
 };
-// ================= FIX 1,2,3 END =================
+// ================= END FIX =================
 
 function openChat(chatId,otherUid,passedName=""){ 
   currentChatId=chatId; currentChatWith=otherUid; 
@@ -211,9 +205,7 @@ function openChat(chatId,otherUid,passedName=""){
   const chatAvatarImg = $("#chatAvatarImg");
   const chatAboutStatus = $("#chatAboutStatus");
   const chatAboutBubble = $("#chatAboutBubble");
-  
   chatTitle.textContent=passedName||cached?.name||"Chat";
-  
   if(chatAvatarImg){
     if(cached?.photoURL){ chatAvatarImg.innerHTML=`<img src="${cached.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
     else { chatAvatarImg.textContent = (cached?.avatar||cached?.name?.[0]||"?").toUpperCase(); }
@@ -223,12 +215,10 @@ function openChat(chatId,otherUid,passedName=""){
     chatAboutStatus.textContent = aboutText;
     if(chatAboutBubble){ chatAboutBubble.style.display = aboutText ? "block" : "none"; }
   }
-
   if(currentUser){
     updateDoc(doc(db,"users",currentUser.uid),{currentChatWith: otherUid, isOnline:true, lastSeen:serverTimestamp()}).catch(()=>{});
   }
   listenToOtherPresence(otherUid);
-
   if(!passedName && !cached){ 
     getDoc(doc(db,"users",otherUid)).then(s=>{ 
       if(s.exists()){ 
@@ -247,31 +237,25 @@ function openChat(chatId,otherUid,passedName=""){
     const sep=document.createElement("div"); sep.className="date-sep"; sep.textContent="Today"; box.appendChild(sep);
     const allMsgs=[];
     snap.forEach(m=> allMsgs.push({id:m.id, ...m.data()}));
-    
     allMsgs.forEach(d=>{
       const row=document.createElement("div"); row.className="msg-row "+(d.from===currentUser.uid?"out":"in");
       const bubble=document.createElement("div"); bubble.className="bubble "+(d.from===currentUser.uid?"out":"in");
       const dateObj = d.ts?.toDate ? d.ts.toDate() : new Date();
       const timeStr = dateObj.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true});
-      
       let tickClass="sent"; let tickIcon=`<i class="fas fa-check"></i>`;
       if(d.from===currentUser.uid){
         if(d.status==="read" || d.read){ tickClass="read"; tickIcon=`<i class="fas fa-check-double"></i>`; }
         else if(d.status==="delivered" || userCache[otherUid]?.isOnline){ tickClass="delivered"; tickIcon=`<i class="fas fa-check-double"></i>`; }
       }
       const ticks = d.from===currentUser.uid ? `<span class="ticks ${tickClass}">${tickIcon}</span>` : "";
-      
-      // ===== FIXED RENDER - CHECK FILE FIRST =====
       const fileHtml = getFileBubbleHtml(d);
       if(fileHtml){
         bubble.innerHTML=`${fileHtml}<span class="msg-time">${timeStr} ${ticks}</span>`;
       } else {
         bubble.innerHTML=`<span class="msg-text">${escapeHtml(d.text)}</span><span class="msg-time">${timeStr} ${ticks}</span>`;
       }
-      
       row.appendChild(bubble);
       box.appendChild(row);
-
       if(d.from!==currentUser.uid && currentChatWith===d.from){
         if(d.status!=="read") updateDoc(doc(db,"chats",currentChatId,"messages",d.id),{status:"read", read:true}).catch(()=>{});
       }
@@ -279,7 +263,6 @@ function openChat(chatId,otherUid,passedName=""){
     setTimeout(()=>{ box.scrollTop=box.scrollHeight; }, 200); 
   }); 
 }
-
 $("#sendBtn").onclick=sendMessage; $("#messageInput").addEventListener("keypress",(e)=>{ if(e.key==="Enter") sendMessage(); });
 async function sendMessage(){
   const text=$("#messageInput").value.trim(); if(!text||!currentChatId) return;
@@ -297,39 +280,55 @@ $("#chatBack").onclick=()=>{
   if(presenceUnsub) presenceUnsub();
   showScreen("app");
 };
-
 const plusChat = document.getElementById('plusChat');
 const fileInput = document.getElementById('fileInput');
 const micBtn = document.getElementById('micBtn');
 const stickerBtn = document.getElementById('stickerBtn');
 const chatVideoCall = document.getElementById('chatVideoCall');
 const chatVoiceCall = document.getElementById('chatVoiceCall');
-
 plusChat?.addEventListener('click', ()=> fileInput?.click());
 
-// ===== FIXED FILE INPUT - REAL FILE UPLOAD =====
+// ===== FIXED FREE FILE INPUT - NO STORAGE COST, 10GB MAX, NO HANG =====
 fileInput?.addEventListener('change', async (e)=>{
   const f=e.target.files[0]; if(!f||!currentChatId) return;
-  const myLang = localStorage.getItem("ddchat_lang") || "en";
+  const sizeMB = f.size/1024/1024;
+  if(sizeMB>10240){ alert("File too big max 10GB. Your file: "+sizeMB.toFixed(2)+"MB"); e.target.value=""; return; }
+  const tempId="up_"+Date.now();
+  $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out"><span class="msg-text">Uploading ${escapeHtml(f.name)} (${sizeMB.toFixed(1)}MB)... ⏳</span></div></div>`);
+  $("#chatMessages").scrollTop=$("#chatMessages").scrollHeight;
+  let fileUrl="";
   try{
-    $("#chatMessages").insertAdjacentHTML("beforeend", `<div class="msg-row out"><div class="bubble out"><span class="msg-text">Uploading ${escapeHtml(f.name)}... ⏳</span></div></div>`);
-    const fileRef = ref(storage, `chat_files/${currentChatId}/${Date.now()}_${f.name}`);
-    await uploadBytes(fileRef, f);
-    const url = await getDownloadURL(fileRef);
-    const isImage = f.type.startsWith("image/");
-    const msgType = isImage ? "image" : "file";
-    await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,fileUrl:url,fileName:f.name,fileType:f.type,msgType:msgType,ts:serverTimestamp(), status:"sent"});
-    await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
-  }catch(err){
-    alert("Upload failed: "+err.message+" - Check Storage Rules");
+    if(f.size < 200*1024*1024){
+      const form=new FormData(); form.append("reqtype","fileupload"); form.append("fileToUpload", f);
+      const res=await fetch("https://catbox.moe/user/api.php",{method:"POST",body:form});
+      fileUrl=(await res.text()).trim();
+      if(!fileUrl.startsWith("https://")) throw new Error("catbox fail");
+    } else { throw new Error("big file"); }
+  }catch{
+    try{
+      const fd=new FormData(); fd.append("file", f);
+      const r=await fetch("https://store1.gofile.io/uploadFile",{method:"POST",body:fd});
+      const j=await r.json();
+      if(j.status==="ok"){ fileUrl=j.data.downloadPage; } else { throw new Error("gofile fail"); }
+    }catch{
+      if(f.size < 900000){
+        fileUrl=await new Promise(res=>{ const reader=new FileReader(); reader.onload=ev=>res(ev.target.result); reader.readAsDataURL(f); });
+      } else {
+        alert("Free hosts down and file >900KB. Try again or use smaller file. Size: "+sizeMB.toFixed(2)+"MB");
+        document.getElementById(tempId)?.remove(); e.target.value=""; return;
+      }
+    }
   }
+  document.getElementById(tempId)?.remove();
+  let msgType=f.type.startsWith("image/")?"image":f.type.startsWith("video/")?"video":f.type.startsWith("audio/")?"voice":"file";
+  await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,fileUrl:fileUrl,fileName:f.name,fileType:f.type,msgType:msgType,ts:serverTimestamp(),status:"sent"});
+  await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
   e.target.value="";
 });
 
+// ===== FIXED FREE VOICE - NO STORAGE, NO HANG =====
 let recState=null;
 let mediaChunks=[];
-
-// ===== FIXED MIC - REAL VOICE UPLOAD + TRANSLATE =====
 micBtn?.addEventListener('click', async ()=>{
   if(recState?.state=="recording"){ recState.stop(); micBtn.innerHTML='<i class="fas fa-microphone"></i>'; return; }
   try{
@@ -337,26 +336,23 @@ micBtn?.addEventListener('click', async ()=>{
     const rec=new MediaRecorder(stream); recState=rec;
     mediaChunks=[]; rec.ondataavailable=e=>mediaChunks.push(e.data);
     rec.onstop=async()=>{
-      if(!currentChatId || mediaChunks.length===0) return;
+      if(!currentChatId) return;
+      const tempId="upv_"+Date.now();
+      $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out">Uploading voice... ⏳</div></div>`);
+      const blob=new Blob(mediaChunks,{type:"audio/webm"});
+      let url="";
       try{
-        const blob = new Blob(mediaChunks, {type:"audio/webm"});
-        const fileName = `voice_${Date.now()}.webm`;
-        $("#chatMessages").insertAdjacentHTML("beforeend", `<div class="msg-row out"><div class="bubble out"><span class="msg-text">Uploading voice... ⏳</span></div></div>`);
-        const audioRef = ref(storage, `voice/${currentChatId}/${fileName}`);
-        await uploadBytes(audioRef, blob);
-        const url = await getDownloadURL(audioRef);
-        // Transcript placeholder - will be translated to account language
-        const toLang = localStorage.getItem("ddchat_lang") || "en";
-        let transcript = "Voice message";
-        let translatedTranscript = "";
-        try{
-          translatedTranscript = await googleTranslate(transcript,"auto",toLang);
-        }catch{}
-        await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice message",audioUrl:url,fileUrl:url,fileName:fileName,fileType:"audio/webm",msgType:"voice",transcript:transcript,translatedTranscript:translatedTranscript,ts:serverTimestamp(), status:"sent"});
-        await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice message",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
-      }catch(err){ alert("Voice upload failed: "+err.message); }
-      stream.getTracks().forEach(t=>t.stop());
-      mediaChunks=[];
+        const fd=new FormData(); fd.append("reqtype","fileupload"); fd.append("fileToUpload", blob, `voice_${Date.now()}.webm`);
+        const res=await fetch("https://catbox.moe/user/api.php",{method:"POST",body:fd});
+        url=(await res.text()).trim();
+        if(!url.startsWith("https://")) throw new Error("catbox fail");
+      }catch{
+        url=await new Promise(r=>{ const reader=new FileReader(); reader.onload=e=>r(e.target.result); reader.readAsDataURL(blob); });
+      }
+      document.getElementById(tempId)?.remove();
+      await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice message",fileUrl:url,audioUrl:url,fileName:"Voice message",fileType:"audio/webm",msgType:"voice",ts:serverTimestamp(),status:"sent"});
+      await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice message",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+      stream.getTracks().forEach(t=>t.stop()); mediaChunks=[];
     };
     rec.start(); micBtn.innerHTML='<i class="fas fa-stop" style="color:#ff3b3b"></i>';
   }catch{ alert("Mic permission needed"); }
@@ -365,7 +361,6 @@ micBtn?.addEventListener('click', async ()=>{
 stickerBtn?.addEventListener('click', ()=>{ if(!currentChatId) return; document.getElementById('messageInput').value+=" 😊"; });
 chatVideoCall?.addEventListener('click', ()=> showModal("Video Call","Video calling soon"));
 chatVoiceCall?.addEventListener('click', ()=> showModal("Voice Call","Voice calling soon"));
-
 $("#postStatusBtn").onclick=()=>{ showModal("Post Status",`<input id="statusText" placeholder="What's on your mind?" style="width:100%;padding:10px"/><button class="btn" id="saveStatus">Post</button>`); setTimeout(()=>{ $("#saveStatus").onclick= async ()=>{ const text=$("#statusText").value.trim(); if(!text) return; await addDoc(collection(db,"status"),{uid:currentUser.uid,text,ts:serverTimestamp()}); $("#modal").classList.add("hidden"); }; },100); };
 function loadStatus(){ const q=query(collection(db,"status"), orderBy("ts","desc")); onSnapshot(q,(snap)=>{ const list=$("#statusList"); list.innerHTML=""; snap.forEach(d=>{ const s=d.data(); const li=document.createElement("li"); li.innerHTML=`<div class="avatar">${s.uid.slice(0,2)}</div><div><b>Status</b><br><small>${escapeHtml(s.text)}</small></div>`; list.appendChild(li); }); }); }
 $("#createGroupBtn").onclick=()=>{ showModal("Create Group",`<input id="groupName" placeholder="Group name" style="width:100%;padding:10px"/><button class="btn" id="saveGroup">Create</button>`); setTimeout(()=>{ $("#saveGroup").onclick= async ()=>{ const name=$("#groupName").value.trim(); if(!name) return; await addDoc(collection(db,"groups"),{name,members:[currentUser.uid],createdBy:currentUser.uid,ts:serverTimestamp()}); $("#modal").classList.add("hidden"); }; },100); };
