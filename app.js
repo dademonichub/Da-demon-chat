@@ -29,6 +29,7 @@ function showModal(title, bodyHtml) {
   $("#modalTitle").textContent = title;
   $("#modalBody").innerHTML = bodyHtml;
   $("#modal").classList.remove("hidden");
+  const l = localStorage.getItem("ddchat_lang"); if(l && l!=="en") setTimeout(()=>translateApp(l), 80);
 }
 $("#modalClose").onclick = () => $("#modal").classList.add("hidden");
 
@@ -235,6 +236,8 @@ onAuthStateChanged(auth, async (user) => {
       $("#profileName").textContent = d.name;
       $("#profileUsername").textContent = "@"+d.username;
       $("#profileAvatar").textContent = d.avatar || d.name[0].toUpperCase();
+      const sticky = document.getElementById("profileStickyName");
+      if(sticky) sticky.textContent = d.name;
       if(!d.ddId){
         const ddId = Math.floor(10000000 + Math.random()*90000000).toString();
         await updateDoc(doc(db,"users",user.uid),{ddId});
@@ -253,6 +256,11 @@ $$("#bottomnav button").forEach(btn => {
     $$("#bottomnav button").forEach(b => b.classList.remove("active")); btn.classList.add("active");
     $$(".page").forEach(p => p.classList.remove("active")); $("#page-" + btn.dataset.page).classList.add("active");
     $("#topTitle").textContent = btn.dataset.page === "chats" ? "DDchat" : btn.dataset.page.charAt(0).toUpperCase()+btn.dataset.page.slice(1);
+    // Reset profile scroll name when switching
+    if(btn.dataset.page !== "profile"){
+      const sticky = document.getElementById("profileStickyName");
+      if(sticky) sticky.style.opacity = "0";
+    }
   };
 });
 
@@ -372,60 +380,25 @@ function loadGroups(){
 
 function loadCalls(){ $("#callList").innerHTML="<li style='padding:15px;color:#8696a0'>No calls yet. Voice/video calling integration coming (use WebRTC).</li>"; }
 
-// === NEW 3 ICONS - SAME COLOR AS APP - REPLACED ===
-$("#topSearchBtn")?.remove(); $("#topQrBtn")?.remove(); $("#topEditBtn")?.remove();
-
-// 1. SEARCH ICON - ONLY SETTINGS
-$("#topSearchBtn")?.addEventListener ? null : document.addEventListener("DOMContentLoaded",()=>{});
-if($("#topSearchBtn")==null){
-  const holder = document.querySelector("#topBar") || document.querySelector(".top") || document.body;
-}
-const topSearchBtn = document.getElementById("topSearchBtn");
-if(topSearchBtn){
-  topSearchBtn.onclick = ()=>{
-    showModal("Search Settings",`
-      <input id="settingsSearchInput" placeholder="Search settings" style="width:100%;padding:12px;border-radius:10px;border:1px solid #ddd"/>
-      <p style="margin-top:10px;color:#8696a0;font-size:13px">Type to filter settings below</p>
-    `);
-    setTimeout(()=>{
-      const inp=$("#settingsSearchInput");
-      if(inp){
-        inp.focus();
-        inp.oninput=(e)=>{
-          const term=e.target.value.toLowerCase();
-          $$(".settings-list li").forEach(li=>{
-            const txt=li.textContent.toLowerCase();
-            li.style.display= txt.includes(term) ? "" : "none";
-          });
-        };
+// ===== PROFILE TOP BAR - WHATSAPP STYLE =====
+document.addEventListener("DOMContentLoaded", ()=>{
+  const scrollArea = document.getElementById('profileScrollArea');
+  const stickyName = document.getElementById('profileStickyName');
+  if(scrollArea && stickyName){
+    scrollArea.addEventListener('scroll', ()=>{
+      stickyName.style.opacity = scrollArea.scrollTop > 60 ? '1' : '0';
+      if(scrollArea.scrollTop > 60){
+        const nameEl = document.getElementById('profileName');
+        if(nameEl) stickyName.textContent = nameEl.textContent.replace('▼','').trim();
       }
-      const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en")translateApp(l);
-    },100);
-  };
-}
+    });
+  }
+});
 
-// Better attach if elements exist in HTML - fallback attach directly
-if(document.getElementById("topSearchBtn")){
-  document.getElementById("topSearchBtn").onclick=()=>{
-    showModal("Search Settings",`<input id="settingsSearchInput" placeholder="Search settings" style="width:100%;padding:12px;border-radius:10px;border:1px solid #ddd"/>`);
-    setTimeout(()=>{
-      $("#settingsSearchInput").oninput=(e)=>{
-        const term=e.target.value.toLowerCase();
-        $$(".settings-list li").forEach(li=>{
-          li.style.display= li.textContent.toLowerCase().includes(term) ? "" : "none";
-        });
-      };
-    },100);
-  };
-}
-
-// SAFE GLOBAL HANDLERS FOR NEW TOP ICONS (works even if IDs created in HTML)
+// SAFE GLOBAL HANDLERS FOR NEW TOP ICONS
 document.addEventListener("click", async (e)=>{
-  // SEARCH
   if(e.target.closest("#topSearchBtn")){
-    showModal("Search Settings",`
-      <input id="settingsSearchInput" placeholder="Search settings" style="width:100%;padding:12px;border-radius:10px;border:1px solid #ddd;margin-top:8px"/>
-    `);
+    showModal("Search Settings",`<input id="settingsSearchInput" placeholder="Search settings" style="width:100%;padding:12px;border-radius:10px;border:1px solid #ddd;margin-top:8px"/>`);
     setTimeout(()=>{
       const inp=document.getElementById("settingsSearchInput");
       if(inp){
@@ -437,11 +410,9 @@ document.addEventListener("click", async (e)=>{
           });
         };
       }
-      const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en")translateApp(l);
     },80);
   }
 
-  // QR CODE ICON - WITH 5 REAL FUNCTIONS
   if(e.target.closest("#topQrBtn")){
     if(!currentUser) return alert("Login first");
     let snap=await getDoc(doc(db,"users",currentUser.uid));
@@ -477,9 +448,6 @@ document.addEventListener("click", async (e)=>{
     `);
 
     setTimeout(async ()=>{
-      const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en")translateApp(l);
-
-      // Share top right
       document.getElementById("shareQrTopRight").onclick=async()=>{
         const shareData={title:"My DDchat QR", text:`My DD ID: ${d.ddId}`, url: qrUrl};
         if(navigator.share){
@@ -490,7 +458,6 @@ document.addEventListener("click", async (e)=>{
         }
       };
 
-      // Go to account when scanned
       async function handleScanned(text){
         document.getElementById("qrResult").innerHTML="Scanned: "+escapeHtml(text);
         if(text.includes("DDCHAT:")){
@@ -502,20 +469,11 @@ document.addEventListener("click", async (e)=>{
               const u=usnap.data();
               document.getElementById("qrResult").innerHTML+=`<br><b>Found: ${u.name} (@${u.username})</b><br><button class="btn" id="goToAccount">Go to Account - Start Chat</button>`;
               document.getElementById("goToAccount").onclick=()=>{ document.getElementById("modal").classList.add("hidden"); startChat(uid); };
-            }else{
-              document.getElementById("qrResult").innerHTML+="<br>User not found";
             }
-          }
-        }else{
-          const q=query(collection(db,"users"), where("uid","==",text.trim()));
-          const s=await getDocs(q);
-          if(!s.empty){
-            s.forEach(docu=>{ const u=docu.data(); startChat(u.uid); document.getElementById("modal").classList.add("hidden"); });
           }
         }
       }
 
-      // Upload scan left option
       document.getElementById("uploadQrBtn").onclick=()=> document.getElementById("qrUploadInput").click();
       document.getElementById("qrUploadInput").onchange=async(ev)=>{
         const file=ev.target.files[0]; if(!file) return;
@@ -529,16 +487,12 @@ document.addEventListener("click", async (e)=>{
         }catch{ document.getElementById("qrResult").textContent="Scan failed"; }
       };
 
-      // Camera scan left
       document.getElementById("scanLeftBtn").onclick=async()=>{
         const video=document.getElementById("qrVideo");
         video.style.display="block";
         try{
           const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
           video.srcObject=stream;
-          const canvas=document.getElementById("qrCanvas");
-          const ctx=canvas.getContext("2d");
-          // Simple interval decode using api? Use BarcodeDetector if available
           if("BarcodeDetector" in window){
             const detector=new BarcodeDetector({formats:["qr_code"]});
             const interval=setInterval(async()=>{
@@ -548,12 +502,11 @@ document.addEventListener("click", async (e)=>{
               }catch{}
             },500);
           }else{
-            document.getElementById("qrResult").textContent="Camera opened - point at QR, then upload image if not detected. Your browser needs BarcodeDetector, use Upload as fallback.";
+            document.getElementById("qrResult").textContent="Camera opened - use Upload if not detected.";
           }
         }catch(err){ document.getElementById("qrResult").textContent="Camera permission denied"; }
       };
 
-      // Reset code
       document.getElementById("resetQrBtn").onclick=async()=>{
         const newDdId=Math.floor(10000000+Math.random()*90000000).toString();
         await updateDoc(doc(db,"users",currentUser.uid),{ddId:newDdId});
@@ -562,11 +515,9 @@ document.addEventListener("click", async (e)=>{
         document.getElementById("qrImg").src=newUrl;
         document.getElementById("qrResult").innerHTML=`New DD ID: ${newDdId} - QR reset done`;
       };
-
     },100);
   }
 
-  // PENCIL ICON - EDIT PROFILE
   if(e.target.closest("#topEditBtn")){
     if(!currentUser) return;
     let snap=await getDoc(doc(db,"users",currentUser.uid));
@@ -596,7 +547,6 @@ document.addEventListener("click", async (e)=>{
       </div>
     `);
     setTimeout(()=>{
-      const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en")translateApp(l);
       let newAvatarLetter = d.avatar;
       document.getElementById("photoInput").onchange=(ev)=>{
         const file=ev.target.files[0]; if(!file) return;
@@ -611,8 +561,9 @@ document.addEventListener("click", async (e)=>{
         await updateDoc(doc(db,"users",currentUser.uid),{name, about, phone, avatar:newAvatarLetter || name[0].toUpperCase()});
         document.getElementById("profileName").textContent=name;
         document.getElementById("profileAvatar").textContent=newAvatarLetter || name[0].toUpperCase();
+        const sticky = document.getElementById("profileStickyName");
+        if(sticky) sticky.textContent=name;
         document.getElementById("modal").classList.add("hidden");
-        alert("Profile updated!");
       };
     },100);
   }
@@ -623,12 +574,7 @@ $$(".settings-list li").forEach(li=>{
     const s=li.dataset.setting;
     if(s==="logout"){ signOut(auth); return; }
     if(s==="account"){
-      const btn=document.getElementById("topEditBtn");
-      if(btn) btn.click();
-      else {
-        document.dispatchEvent(new Event("click"));
-        document.querySelector("#topEditBtn")?.click();
-      }
+      document.getElementById("topEditBtn")?.click();
       return;
     }
     showModal(li.textContent.trim(),"<p>"+s+" settings coming soon - built.</p>");
