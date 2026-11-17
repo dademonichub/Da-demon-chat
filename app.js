@@ -94,7 +94,17 @@ function formatTimeWithAMPM(date){ if(!date) return ""; return date.toLocaleTime
 
 let currentViewerFile = { url:"", name:"", type:"" };
 let currentOcrText = "";
-function saveFileGlobal(url, name){ const a=document.createElement("a"); a.href=url; a.download=name||"file"; document.body.appendChild(a); a.click(); a.remove(); }
+function saveFileGlobal(url, name){
+  if(url.startsWith("data:")){
+    const a=document.createElement("a"); a.href=url; a.download=name||"file"; document.body.appendChild(a); a.click(); a.remove(); return;
+  }
+  fetch(url).then(r=>r.blob()).then(b=>{
+    const u=URL.createObjectURL(b);
+    const a=document.createElement("a"); a.href=u; a.download=name||"file"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500);
+  }).catch(()=>{
+    const a=document.createElement("a"); a.href=url; a.target="_blank"; a.download=name||"file"; document.body.appendChild(a); a.click(); a.remove();
+  });
+}
 window.saveFileGlobal = saveFileGlobal;
 function openFileViewer(url, fileName, type){
   currentViewerFile = { url, name: fileName, type };
@@ -106,11 +116,11 @@ function openFileViewer(url, fileName, type){
   if(type==="image"){
     content.innerHTML=`<img id="viewerImg" src="${url}" style="max-width:100%;max-height:65vh;border-radius:12px;display:block;margin:auto"><div id="ocrResult" style="margin-top:12px;color:#aaa;font-size:13px;white-space:pre-wrap"></div>`;
   } else if(type==="video"){
-    content.innerHTML=`<video src="${url}" controls style="width:100%;max-height:65vh;border-radius:12px"></video><div id="ocrResult"></div>`;
+    content.innerHTML=`<video src="${url}" controls autoplay style="width:100%;max-height:65vh;border-radius:12px"></video><div id="ocrResult"></div>`;
   } else if(type==="audio" || type==="voice"){
-    content.innerHTML=`<audio controls src="${url}" style="width:100%"></audio><div id="ocrResult" style="margin-top:10px"></div>`;
+    content.innerHTML=`<audio controls autoplay src="${url}" style="width:100%"></audio><div id="ocrResult" style="margin-top:10px"></div>`;
   } else {
-    content.innerHTML=`<div style="text-align:center;padding:20px"><div style="font-size:50px">📄</div><p>${escapeHtml(fileName)}</p><iframe src="${url}" style="width:100%;height:50vh;border:none;border-radius:10px;margin-top:10px"></iframe></div><div id="ocrResult"></div>`;
+    content.innerHTML=`<div style="text-align:center;padding:20px"><div style="font-size:50px">📄</div><p>${escapeHtml(fileName)}</p></div><div id="ocrResult"></div>`;
   }
   $("#viewerTranslation").innerHTML="";
   modal.style.display="flex";
@@ -130,8 +140,8 @@ function createFileViewerModal(){
     </div>
     <div id="viewerContent" style="padding:12px"></div>
     <div id="viewerActions" style="display:flex;gap:10px;padding:12px">
-      <button onclick="saveFileGlobal(currentViewerFile.url, currentViewerFile.name)" style="flex:1;padding:12px;border-radius:10px;border:none;background:#5E35B1;color:white;font-weight:bold;cursor:pointer">💾 Save</button>
-      <button onclick="translateFileText()" style="flex:1;padding:12px;border-radius:10px;border:none;background:#1e88e5;color:white;font-weight:bold;cursor:pointer">🌐 Translate Text Inside</button>
+      <button onclick="saveFileGlobal(currentViewerFile.url, currentViewerFile.name)" style="flex:1;padding:12px;border-radius:10px;border:none;background:#5E35B1;color:white;font-weight:bold;cursor:pointer">💾 Save to Phone</button>
+      <button onclick="translateFileText()" style="flex:1;padding:12px;border-radius:10px;border:none;background:#1e88e5;color:white;font-weight:bold;cursor:pointer">🌐 Translate</button>
     </div>
     <div id="viewerTranslation" style="padding:12px"></div>
   </div>`;
@@ -170,13 +180,13 @@ function getFileBubbleHtml(d){
   const isVideo = d.fileType?.startsWith("video/") || d.msgType==="video";
   const isVoice = d.fileType?.startsWith("audio/") || d.msgType==="voice";
   if(isImage){
-    return `<div><img src="${fileUrl}" onclick="openFileViewer(this.src,'${safeName}','image')" style="max-width:240px;max-height:240px;border-radius:12px;display:block;object-fit:cover;cursor:pointer"><div style="font-size:11px;color:#bbb;margin-top:4px">Tap to view full</div></div>`;
+    return `<div><img src="${fileUrl}" onclick="openFileViewer(this.src,'${safeName}','image')" style="max-width:240px;max-height:240px;border-radius:12px;display:block;object-fit:cover;cursor:pointer"><div style="font-size:11px;color:#bbb;margin-top:4px">Tap to view big + Save</div></div>`;
   } else if(isVideo){
-    return `<div><video src="${fileUrl}" controls style="max-width:240px;border-radius:12px;display:block"></video><button onclick="openFileViewer('${fileUrl}','${safeName}','video')" style="font-size:11px;color:#bbb;margin-top:4px;width:100%;background:#2a1a6a;border:none;color:white;padding:8px;border-radius:8px">Tap to view full</button></div>`;
+    return `<div><video src="${fileUrl}" controls preload="metadata" style="max-width:240px;border-radius:12px;display:block"></video><button onclick="openFileViewer('${fileUrl}','${safeName}','video')" style="font-size:12px;margin-top:6px;width:100%;background:#5E35B1;border:none;color:white;padding:10px;border-radius:8px;font-weight:bold">📺 Tap to view big + Save</button></div>`;
   } else if(isVoice){
-    return `<div style="min-width:220px;background:#2a1a6a;padding:8px;border-radius:12px"><audio controls src="${fileUrl}" style="width:100%"></audio><div style="font-size:12px;margin-top:4px">🎤 ${safeName}</div></div>`;
+    return `<div style="min-width:220px;background:#2a1a6a;padding:8px;border-radius:12px"><audio controls preload="metadata" src="${fileUrl}" style="width:100%"></audio><div style="font-size:12px;margin-top:4px">🎤 ${safeName} - Tap play</div></div>`;
   } else {
-    return `<div onclick="openFileViewer('${fileUrl}','${safeName}','doc')" style="display:flex;align-items:center;gap:10px;background:#2a1a6a;padding:12px;border-radius:12px;cursor:pointer;min-width:200px"><div style="font-size:30px">📄</div><div><div style="font-weight:bold;color:white;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</div><div style="font-size:11px;color:#aaa">Tap to open</div></div></div>`;
+    return `<div onclick="openFileViewer('${fileUrl}','${safeName}','doc')" style="display:flex;align-items:center;gap:10px;background:#2a1a6a;padding:12px;border-radius:12px;cursor:pointer;min-width:200px"><div style="font-size:30px">📄</div><div><div style="font-weight:bold;color:white;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</div><div style="font-size:11px;color:#aaa">Tap to open + Save</div></div></div>`;
   }
 }
 
@@ -268,7 +278,7 @@ const chatVideoCall = document.getElementById('chatVideoCall');
 const chatVoiceCall = document.getElementById('chatVoiceCall');
 plusChat?.addEventListener('click', ()=> fileInput?.click());
 
-// ===== NO FIREBASE STORAGE - FREE HOST FIX FOR ALL 4 ISSUES =====
+// ===== FIXED - NO REFRESH, NO FIREBASE STORAGE, VOICE PLAYS =====
 async function compressImage(file, maxKB = 700) {
   return new Promise((resolve)=>{
     const img = new Image();
@@ -284,7 +294,7 @@ async function compressImage(file, maxKB = 700) {
       const canvas = document.createElement("canvas");
       canvas.width = width; canvas.height = height;
       canvas.getContext("2d").drawImage(img,0,0,width,height);
-      resolve(canvas.toDataURL("image/jpeg", 0.75));
+      resolve(canvas.toDataURL("image/jpeg", 0.72));
     };
     reader.readAsDataURL(file);
   });
@@ -292,34 +302,39 @@ async function compressImage(file, maxKB = 700) {
 async function uploadFree(file){
   const fd = new FormData(); fd.append("file", file);
   try{
-    const res = await fetch("https://0x0.st", {method:"POST", body:fd});
-    const txt = (await res.text()).trim();
-    if(txt.startsWith("https://")) return txt;
-  }catch(e){ console.log("0x0 fail", e); }
+    const r = await fetch("https://0x0.st",{method:"POST",body:fd});
+    const t = (await r.text()).trim();
+    if(t.startsWith("https://")) return t;
+  }catch{}
+  try{
+    const fd2 = new FormData(); fd2.append("reqtype","fileupload"); fd2.append("fileToUpload", file);
+    const r2 = await fetch("https://catbox.moe/user/api.php",{method:"POST",body:fd2});
+    const t2 = (await r2.text()).trim();
+    if(t2.startsWith("https://")) return t2;
+  }catch{}
   return null;
 }
 fileInput?.addEventListener('change', async (e)=>{
   const f=e.target.files[0]; if(!f||!currentChatId) return;
   const tid="up_"+Date.now();
-  $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tid}" class="msg-row out"><div class="bubble out">Uploading ${escapeHtml(f.name)} (${(f.size/1024/1024).toFixed(1)}MB)... ⏳</div></div>`);
+  $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tid}" class="msg-row out"><div class="bubble out">Uploading ${escapeHtml(f.name)}... ⏳</div></div>`);
   $("#chatMessages").scrollTop=$("#chatMessages").scrollHeight;
   let fileUrl=null;
   try{
     if(f.type.startsWith("image/")){
-      fileUrl = await compressImage(f, 700);
+      fileUrl = await compressImage(f);
     }else{
       fileUrl = await uploadFree(f);
       if(!fileUrl){
-        fileUrl = await new Promise(res=>{ const r=new FileReader(); r.onload=ev=>res(ev.target.result); r.readAsDataURL(f); });
+        document.getElementById(tid)?.remove();
+        e.target.value="";
+        return;
       }
     }
-  }catch{
-    if(f.type.startsWith("image/")) fileUrl = await compressImage(f, 700);
-  }
+  }catch{ document.getElementById(tid)?.remove(); e.target.value=""; return; }
   document.getElementById(tid)?.remove();
-  if(!fileUrl){ e.target.value=""; return; }
   const msgType=f.type.startsWith("image/")?"image":f.type.startsWith("video/")?"video":f.type.startsWith("audio/")?"voice":"file";
-  await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,fileUrl:fileUrl,fileName:f.name,fileType:f.type,msgType:msgType,ts:serverTimestamp(),status:"sent"});
+  await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,fileUrl,fileName:f.name,fileType:f.type,msgType,ts:serverTimestamp(),status:"sent"});
   await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
   e.target.value="";
 });
@@ -330,18 +345,23 @@ micBtn?.addEventListener('click', async ()=>{
   if(recState?.state=="recording"){ recState.stop(); micBtn.innerHTML='<i class="fas fa-microphone"></i>'; return; }
   try{
     const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-    const rec=new MediaRecorder(stream); recState=rec;
-    mediaChunks=[]; rec.ondataavailable=e=>mediaChunks.push(e.data);
+    const rec=new MediaRecorder(stream, {mimeType:'audio/webm'}); recState=rec;
+    mediaChunks=[]; rec.ondataavailable=e=>{ if(e.data.size>0) mediaChunks.push(e.data); };
     rec.onstop=async()=>{
-      if(!currentChatId) return;
+      if(!currentChatId || mediaChunks.length===0) return;
       const blob=new Blob(mediaChunks,{type:"audio/webm"});
+      const tid="upv_"+Date.now();
+      $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tid}" class="msg-row out"><div class="bubble out">Sending voice... ⏳</div></div>`);
       let url = await uploadFree(blob);
-      if(!url) url=await new Promise(r=>{ const reader=new FileReader(); reader.onload=e=>r(e.target.result); reader.readAsDataURL(blob); });
+      if(!url){
+        url = await new Promise(r=>{ const fr=new FileReader(); fr.onload=ev=>r(ev.target.result); fr.readAsDataURL(blob); });
+      }
+      document.getElementById(tid)?.remove();
       await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice message",fileUrl:url,audioUrl:url,fileName:"Voice message",fileType:"audio/webm",msgType:"voice",ts:serverTimestamp(),status:"sent"});
       await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice message",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
       stream.getTracks().forEach(t=>t.stop()); mediaChunks=[];
     };
-    rec.start(); micBtn.innerHTML='<i class="fas fa-stop" style="color:#ff3b3b"></i>';
+    rec.start(100); micBtn.innerHTML='<i class="fas fa-stop" style="color:#ff3b3b"></i>';
   }catch{}
 });
 
