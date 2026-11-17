@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, limit, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -15,6 +15,7 @@ let selectedLang = localStorage.getItem("ddchat_lang") || "en";
 const userCache = {};
 let presenceUnsub = null;
 let heartbeatInterval = null;
+let chatUnsub = null;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 function showScreen(id){ $$(".screen").forEach(s => s.classList.remove("active")); $("#" + id).classList.add("active"); }
@@ -83,7 +84,7 @@ async function markMyMessagesAsRead(){
     s.forEach(m=>{ if(m.data().status!=="read") updateDoc(doc(db,"chats",currentChatId,"messages",m.id),{status:"read", read:true}).catch(()=>{}); });
   }catch{}
 }
-onAuthStateChanged(auth, async (user) => { authChecked = true; if (user) { currentUser = user; const snap = await getDoc(doc(db, "users", user.uid)); if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; const av = $("#profileAvatar"); if(d.photoURL){ av.innerHTML = `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; av.dataset.full = d.photoURL; } else { av.textContent = d.avatar || d.name[0].toUpperCase(); av.dataset.full = ""; } const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.textContent = d.name; if(!d.ddId){ const ddId = Math.floor(10000000 + Math.random()*90000000).toString(); await updateDoc(doc(db,"users",user.uid),{ddId}); } } showScreen("app"); startPresence(); loadChats(); loadGroups(); loadStatus(); loadCalls(); } else { currentUser=null; if(heartbeatInterval) clearInterval(heartbeatInterval); if(presenceUnsub) presenceUnsub(); if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen"); else showScreen("language-screen"); } });
+onAuthStateChanged(auth, async (user) => { authChecked = true; if (user) { currentUser = user; const snap = await getDoc(doc(db, "users", user.uid)); if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; const av = $("#profileAvatar"); if(d.photoURL){ av.innerHTML = `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; av.dataset.full = d.photoURL; } else { av.textContent = d.avatar || d.name[0].toUpperCase(); av.dataset.full = ""; } const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.textContent = d.name; if(!d.ddId){ const ddId = Math.floor(10000000 + Math.random()*90000000).toString(); await updateDoc(doc(db,"users",user.uid),{ddId}); } } showScreen("app"); startPresence(); loadChats(); loadGroups(); loadStatus(); loadCalls(); } else { currentUser=null; if(heartbeatInterval) clearInterval(heartbeatInterval); if(presenceUnsub) presenceUnsub(); if(chatUnsub) chatUnsub(); if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen"); else showScreen("language-screen"); } });
 $$("#bottomnav button").forEach(btn => { btn.onclick = () => { $$("#bottomnav button").forEach(b => b.classList.remove("active")); btn.classList.add("active"); $$(".page").forEach(p => p.classList.remove("active")); $("#page-" + btn.dataset.page).classList.add("active"); $("#topTitle").textContent = btn.dataset.page === "chats" ? "DDchat" : btn.dataset.page.charAt(0).toUpperCase()+btn.dataset.page.slice(1); if(btn.dataset.page !== "profile"){ const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.style.opacity = "0"; } }; });
 function openFullPhoto(url){ if(!url) return; showModal("Photo",`<div style="position:fixed;inset:0;background:#000;z-index:99999;display:flex;flex-direction:column"><div style="padding:15px;display:flex;align-items:center;background:#111"><button id="photoBackBtn" style="background:#333;border:none;width:42px;height:42px;border-radius:50%;color:white;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer">←</button><span style="color:white;margin-left:15px;font-weight:bold">Profile Photo</span></div><div style="flex:1;display:flex;align-items:center;justify-content:center;background:black;padding:10px"><img src="${url}" style="max-width:100%;max-height:85vh;object-fit:contain;border-radius:8px"/></div></div>`); setTimeout(()=>{ const btn=document.getElementById("photoBackBtn"); if(btn) btn.onclick=()=>$("#modal").classList.add("hidden"); },50); }
 function loadChats(){ if(!currentUser) return; const q = query(collection(db, "chats"), where("members","array-contains",currentUser.uid)); onSnapshot(q, (snap)=>{ const list=$("#chatList"); if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username or DD ID above to start.</li>"; return; } const chatMap = new Map(); snap.forEach(chatDoc=>{ const data=chatDoc.data(); const otherUid=data.members.find(m=>m!==currentUser.uid); if(!otherUid) return; const exist = chatMap.get(otherUid); if(!exist) chatMap.set(otherUid, chatDoc); else { const t1 = exist.data().updated?.toMillis?.()||0; const t2 = data.updated?.toMillis?.()||0; if(t2>t1) chatMap.set(otherUid, chatDoc); } }); list.innerHTML=""; chatMap.forEach((chatDoc, otherUid)=>{ const data=chatDoc.data(); const unread = data.unreadCount?.[currentUser.uid] || 0; const cached = userCache[otherUid]; const name = cached?.name || "DD User"; const letter = cached?.avatar || name[0] || "U"; const photo = cached?.photoURL || ""; const avatarHtml = photo ? `<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></div>` : `<div class="avatar" style="width:48px;height:48px;flex-shrink:0">${letter}</div>`; const li=document.createElement("li"); li.id = "chat_"+otherUid; li.style.display="flex"; li.style.alignItems="center"; li.style.gap="12px"; li.style.padding="12px"; li.style.borderBottom="1px solid rgba(255,255,255,0.06)"; li.style.cursor="pointer"; li.innerHTML=`${avatarHtml}<div style="flex:1;min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</b><small style="color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${escapeHtml(data.lastMsg||"Start chatting")}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`; li.onclick=()=>openChat(chatDoc.id,otherUid, cached?.name||""); list.appendChild(li); }); chatMap.forEach(async (chatDoc, otherUid)=>{ if(userCache[otherUid]) return; try{ const usnap = await getDoc(doc(db,"users",otherUid)); if(usnap.exists()){ const u = usnap.data(); userCache[otherUid]=u; const el = document.getElementById("chat_"+otherUid); if(el){ const photo = u.photoURL||""; const letter = u.avatar||u.name?.[0]?.toUpperCase()||"U"; const avatarHtml = photo ? `<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></div>` : `<div class="avatar" style="width:48px;height:48px;flex-shrink:0">${letter}</div>`; const data = chatDoc.data(); el.innerHTML=`${avatarHtml}<div style="flex:1;min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.name||"DD User")}</b><small style="color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${escapeHtml(data.lastMsg||"Start chatting")}</small></div>${data.unreadCount?.[currentUser.uid]?`<span class="unread-badge">${data.unreadCount[currentUser.uid]}</span>`:''}`; el.onclick=()=>openChat(chatDoc.id,otherUid,u.name); } } }catch{} }); }, (err)=>{ console.log("Chats offline:", err.code); }); }
@@ -102,25 +103,24 @@ function saveFileGlobal(url, name){
     const u=URL.createObjectURL(b);
     const a=document.createElement("a"); a.href=u; a.download=name||"file"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500);
   }).catch(()=>{
-    const a=document.createElement("a"); a.href=url; a.target="_blank"; a.download=name||"file"; document.body.appendChild(a); a.click(); a.remove();
+    window.open(url,"_blank");
   });
 }
 window.saveFileGlobal = saveFileGlobal;
 function openFileViewer(url, fileName, type){
   currentViewerFile = { url, name: fileName, type };
-  currentOcrText="";
   let modal = document.getElementById("fileViewerModal");
   if(!modal){ createFileViewerModal(); modal=document.getElementById("fileViewerModal"); }
   $("#viewerFileName").textContent=fileName;
   const content = $("#viewerContent");
   if(type==="image"){
-    content.innerHTML=`<img id="viewerImg" src="${url}" style="max-width:100%;max-height:65vh;border-radius:12px;display:block;margin:auto"><div id="ocrResult" style="margin-top:12px;color:#aaa;font-size:13px;white-space:pre-wrap"></div>`;
+    content.innerHTML=`<img src="${url}" style="max-width:100%;max-height:65vh;border-radius:12px;display:block;margin:auto">`;
   } else if(type==="video"){
-    content.innerHTML=`<video src="${url}" controls autoplay style="width:100%;max-height:65vh;border-radius:12px"></video><div id="ocrResult"></div>`;
+    content.innerHTML=`<video src="${url}" controls autoplay style="width:100%;max-height:65vh;border-radius:12px"></video>`;
   } else if(type==="audio" || type==="voice"){
-    content.innerHTML=`<audio controls autoplay src="${url}" style="width:100%"></audio><div id="ocrResult" style="margin-top:10px"></div>`;
+    content.innerHTML=`<audio controls autoplay src="${url}" style="width:100%"></audio>`;
   } else {
-    content.innerHTML=`<div style="text-align:center;padding:20px"><div style="font-size:50px">📄</div><p>${escapeHtml(fileName)}</p></div><div id="ocrResult"></div>`;
+    content.innerHTML=`<div style="text-align:center;padding:20px">📄 ${escapeHtml(fileName)}</div>`;
   }
   $("#viewerTranslation").innerHTML="";
   modal.style.display="flex";
@@ -132,43 +132,30 @@ function createFileViewerModal(){
   const div=document.createElement("div");
   div.id="fileViewerModal";
   div.style.cssText="position:fixed;inset:0;z-index:999999;display:none;align-items:center;justify-content:center;";
-  div.innerHTML=`<div id="fileViewerBackdrop" onclick="closeFileViewer()" style="position:absolute;inset:0;background:rgba(0,0,0,0.85)"></div>
-  <div id="fileViewerBox" style="position:relative;background:#121212;width:95%;max-width:600px;max-height:90vh;overflow-y:auto;border-radius:16px;padding:0;z-index:2;display:flex;flex-direction:column">
-    <div id="viewerHeader" style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #222;position:sticky;top:0;background:#121212">
-      <span id="viewerFileName" style="font-weight:bold;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%">File</span>
-      <button onclick="closeFileViewer()" style="background:#222;border:none;color:white;width:36px;height:36px;border-radius:50%;font-size:18px">✕</button>
-    </div>
+  div.innerHTML=`<div onclick="closeFileViewer()" style="position:absolute;inset:0;background:rgba(0,0,0,0.85)"></div>
+  <div style="position:relative;background:#121212;width:95%;max-width:600px;max-height:90vh;overflow-y:auto;border-radius:16px;z-index:2;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #222"><span id="viewerFileName" style="font-weight:bold;color:white">File</span><button onclick="closeFileViewer()" style="background:#222;border:none;color:white;width:36px;height:36px;border-radius:50%">✕</button></div>
     <div id="viewerContent" style="padding:12px"></div>
-    <div id="viewerActions" style="display:flex;gap:10px;padding:12px">
-      <button onclick="saveFileGlobal(currentViewerFile.url, currentViewerFile.name)" style="flex:1;padding:12px;border-radius:10px;border:none;background:#5E35B1;color:white;font-weight:bold;cursor:pointer">💾 Save to Phone</button>
-      <button onclick="translateFileText()" style="flex:1;padding:12px;border-radius:10px;border:none;background:#1e88e5;color:white;font-weight:bold;cursor:pointer">🌐 Translate</button>
-    </div>
+    <div style="display:flex;gap:10px;padding:12px"><button onclick="saveFileGlobal(currentViewerFile.url, currentViewerFile.name)" style="flex:1;padding:12px;border-radius:10px;border:none;background:#5E35B1;color:white;font-weight:bold">💾 Save to Phone</button><button onclick="translateFileText()" style="flex:1;padding:12px;border-radius:10px;border:none;background:#1e88e5;color:white;font-weight:bold">🌐 Translate</button></div>
     <div id="viewerTranslation" style="padding:12px"></div>
   </div>`;
   document.body.appendChild(div);
 }
 window.translateFileText = async function(){
   const resEl=document.getElementById("viewerTranslation");
-  const ocrEl=document.getElementById("ocrResult");
-  resEl.innerHTML="🔍 Reading text inside...";
+  resEl.innerHTML="🔍 Reading...";
   try{
     if(currentViewerFile.type==="image"){
       if(!window.Tesseract){
-        resEl.innerHTML="Loading OCR engine...";
         await new Promise((r,j)=>{ const s=document.createElement("script"); s.src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"; s.onload=r; s.onerror=j; document.head.appendChild(s); });
       }
       const { data:{text} } = await Tesseract.recognize(currentViewerFile.url, "eng");
       currentOcrText=text.trim();
-      ocrEl.innerText=currentOcrText ? `Found: ${currentOcrText.slice(0,500)}` : "No text found in picture";
-    } else {
-      currentOcrText=currentViewerFile.name;
-      ocrEl.innerText="For documents, translating filename.";
-    }
-    if(!currentOcrText){ resEl.innerHTML="No text to translate"; return; }
-    resEl.innerHTML="Translating...";
+    } else { currentOcrText=currentViewerFile.name; }
+    if(!currentOcrText){ resEl.innerHTML="No text"; return; }
     const toLang=localStorage.getItem("ddchat_lang")||"en";
     const translated=await googleTranslate(currentOcrText,"auto",toLang);
-    resEl.innerHTML=`<div style="background:#1e1e1e;padding:12px;border-radius:10px;color:white"><b>Translated (${toLang}):</b><br><div style="margin-top:8px;white-space:pre-wrap">${escapeHtml(translated)}</div></div>`;
+    resEl.innerHTML=`<div style="background:#1e1e1e;padding:12px;border-radius:10px;color:white;white-space:pre-wrap">${escapeHtml(translated)}</div>`;
   }catch(e){ resEl.innerHTML="Error: "+e.message; }
 };
 function getFileBubbleHtml(d){
@@ -180,53 +167,38 @@ function getFileBubbleHtml(d){
   const isVideo = d.fileType?.startsWith("video/") || d.msgType==="video";
   const isVoice = d.fileType?.startsWith("audio/") || d.msgType==="voice";
   if(isImage){
-    return `<div><img src="${fileUrl}" onclick="openFileViewer(this.src,'${safeName}','image')" style="max-width:240px;max-height:240px;border-radius:12px;display:block;object-fit:cover;cursor:pointer"><div style="font-size:11px;color:#bbb;margin-top:4px">Tap to view big + Save</div></div>`;
+    return `<div><img src="${fileUrl}" loading="lazy" onclick="openFileViewer(this.src,'${safeName}','image')" style="max-width:220px;max-height:220px;border-radius:12px;display:block;object-fit:cover;cursor:pointer"><div style="font-size:11px;color:#bbb;margin-top:4px">Tap to view big + Save</div></div>`;
   } else if(isVideo){
-    return `<div><video src="${fileUrl}" controls preload="metadata" style="max-width:240px;border-radius:12px;display:block"></video><button onclick="openFileViewer('${fileUrl}','${safeName}','video')" style="font-size:12px;margin-top:6px;width:100%;background:#5E35B1;border:none;color:white;padding:10px;border-radius:8px;font-weight:bold">📺 Tap to view big + Save</button></div>`;
+    return `<div><video src="${fileUrl}" controls preload="metadata" style="max-width:220px;border-radius:12px;display:block"></video><button onclick="openFileViewer('${fileUrl}','${safeName}','video')" style="font-size:12px;margin-top:6px;width:100%;background:#5E35B1;border:none;color:white;padding:10px;border-radius:8px;font-weight:bold">📺 View + Save</button></div>`;
   } else if(isVoice){
-    return `<div style="min-width:220px;background:#2a1a6a;padding:8px;border-radius:12px"><audio controls preload="metadata" src="${fileUrl}" style="width:100%"></audio><div style="font-size:12px;margin-top:4px">🎤 ${safeName} - Tap play</div></div>`;
+    return `<div style="min-width:200px;background:#2a1a6a;padding:8px;border-radius:12px"><audio controls preload="metadata" src="${fileUrl}" style="width:100%"></audio></div>`;
   } else {
-    return `<div onclick="openFileViewer('${fileUrl}','${safeName}','doc')" style="display:flex;align-items:center;gap:10px;background:#2a1a6a;padding:12px;border-radius:12px;cursor:pointer;min-width:200px"><div style="font-size:30px">📄</div><div><div style="font-weight:bold;color:white;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</div><div style="font-size:11px;color:#aaa">Tap to open + Save</div></div></div>`;
+    return `<div onclick="openFileViewer('${fileUrl}','${safeName}','doc')" style="display:flex;align-items:center;gap:10px;background:#2a1a6a;padding:12px;border-radius:12px;cursor:pointer;min-width:180px"><div style="font-size:28px">📄</div><div><div style="font-weight:bold;color:white;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</div><div style="font-size:11px;color:#aaa">Tap to open</div></div></div>`;
   }
 }
 
 function openChat(chatId,otherUid,passedName=""){ 
+  if(chatUnsub) chatUnsub();
   currentChatId=chatId; currentChatWith=otherUid; 
   showScreen("chat-view"); 
   const cached = userCache[otherUid];
-  const chatTitle = $("#chatTitle");
+  $("#chatTitle").textContent=passedName||cached?.name||"Chat";
   const chatAvatarImg = $("#chatAvatarImg");
-  const chatAboutStatus = $("#chatAboutStatus");
-  const chatAboutBubble = $("#chatAboutBubble");
-  chatTitle.textContent=passedName||cached?.name||"Chat";
   if(chatAvatarImg){
     if(cached?.photoURL){ chatAvatarImg.innerHTML=`<img src="${cached.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
     else { chatAvatarImg.textContent = (cached?.avatar||cached?.name?.[0]||"?").toUpperCase(); }
-  }
-  if(chatAboutStatus){
-    const aboutText = cached?.about || "Hey there! I'm using DDchat.";
-    chatAboutStatus.textContent = aboutText;
-    if(chatAboutBubble){ chatAboutBubble.style.display = aboutText ? "block" : "none"; }
   }
   if(currentUser){
     updateDoc(doc(db,"users",currentUser.uid),{currentChatWith: otherUid, isOnline:true, lastSeen:serverTimestamp()}).catch(()=>{});
   }
   listenToOtherPresence(otherUid);
-  if(!passedName && !cached){ 
-    getDoc(doc(db,"users",otherUid)).then(s=>{ 
-      if(s.exists()){ 
-        const u=s.data(); userCache[otherUid]=u; 
-        $("#chatTitle").textContent=u.name;
-      } 
-    }).catch(()=>{}); 
-  } 
   updateDoc(doc(db,"chats",chatId),{[ `unreadCount.${currentUser.uid}`]:0}).catch(()=>{}); 
-  const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts")); 
-  onSnapshot(q,(snap)=>{ 
+  const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts","desc"), limit(60)); 
+  chatUnsub = onSnapshot(q,(snap)=>{ 
     const box=$("#chatMessages"); box.innerHTML=""; 
-    const sep=document.createElement("div"); sep.className="date-sep"; sep.textContent="Today"; box.appendChild(sep);
     const allMsgs=[];
     snap.forEach(m=> allMsgs.push({id:m.id, ...m.data()}));
+    allMsgs.reverse();
     allMsgs.forEach(d=>{
       const row=document.createElement("div"); row.className="msg-row "+(d.from===currentUser.uid?"out":"in");
       const bubble=document.createElement("div"); bubble.className="bubble "+(d.from===currentUser.uid?"out":"in");
@@ -235,22 +207,18 @@ function openChat(chatId,otherUid,passedName=""){
       let tickClass="sent"; let tickIcon=`<i class="fas fa-check"></i>`;
       if(d.from===currentUser.uid){
         if(d.status==="read" || d.read){ tickClass="read"; tickIcon=`<i class="fas fa-check-double"></i>`; }
-        else if(d.status==="delivered" || userCache[otherUid]?.isOnline){ tickClass="delivered"; tickIcon=`<i class="fas fa-check-double"></i>`; }
+        else if(d.status==="delivered"){ tickClass="delivered"; tickIcon=`<i class="fas fa-check-double"></i>`; }
       }
       const ticks = d.from===currentUser.uid ? `<span class="ticks ${tickClass}">${tickIcon}</span>` : "";
       const fileHtml = getFileBubbleHtml(d);
-      if(fileHtml){
-        bubble.innerHTML=`${fileHtml}<span class="msg-time">${timeStr} ${ticks}</span>`;
-      } else {
-        bubble.innerHTML=`<span class="msg-text">${escapeHtml(d.text)}</span><span class="msg-time">${timeStr} ${ticks}</span>`;
-      }
+      bubble.innerHTML = fileHtml ? `${fileHtml}<span class="msg-time">${timeStr} ${ticks}</span>` : `<span class="msg-text">${escapeHtml(d.text)}</span><span class="msg-time">${timeStr} ${ticks}</span>`;
       row.appendChild(bubble);
       box.appendChild(row);
-      if(d.from!==currentUser.uid && currentChatWith===d.from){
-        if(d.status!=="read") updateDoc(doc(db,"chats",currentChatId,"messages",d.id),{status:"read", read:true}).catch(()=>{});
+      if(d.from!==currentUser.uid && currentChatWith===d.from && d.status!=="read"){
+        updateDoc(doc(db,"chats",currentChatId,"messages",d.id),{status:"read"}).catch(()=>{});
       }
     }); 
-    setTimeout(()=>{ box.scrollTop=box.scrollHeight; }, 200); 
+    requestAnimationFrame(()=>{ box.scrollTop=box.scrollHeight; });
   }); 
 }
 $("#sendBtn").onclick=sendMessage; $("#messageInput").addEventListener("keypress",(e)=>{ if(e.key==="Enter") sendMessage(); });
@@ -268,6 +236,7 @@ $("#chatBack").onclick=()=>{
   }
   currentChatWith=null;
   if(presenceUnsub) presenceUnsub();
+  if(chatUnsub) chatUnsub();
   showScreen("app");
 };
 const plusChat = document.getElementById('plusChat');
@@ -278,23 +247,22 @@ const chatVideoCall = document.getElementById('chatVideoCall');
 const chatVoiceCall = document.getElementById('chatVoiceCall');
 plusChat?.addEventListener('click', ()=> fileInput?.click());
 
-// ===== FIXED - NO REFRESH, NO FIREBASE STORAGE, VOICE PLAYS =====
-async function compressImage(file, maxKB = 700) {
+async function compressImage(file) {
   return new Promise((resolve)=>{
     const img = new Image();
     const reader = new FileReader();
     reader.onload = e => { img.src = e.target.result; };
     img.onload = ()=>{
-      let width = img.width, height = img.height;
-      const maxDim = 1280;
-      if(width > maxDim || height > maxDim){
-        if(width > height){ height *= maxDim/width; width = maxDim; } 
-        else { width *= maxDim/height; height = maxDim; }
+      let w = img.width, h = img.height;
+      const maxDim = 900;
+      if(w > maxDim || h > maxDim){
+        if(w > h){ h *= maxDim/w; w = maxDim; } 
+        else { w *= maxDim/h; h = maxDim; }
       }
       const canvas = document.createElement("canvas");
-      canvas.width = width; canvas.height = height;
-      canvas.getContext("2d").drawImage(img,0,0,width,height);
-      resolve(canvas.toDataURL("image/jpeg", 0.72));
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img,0,0,w,h);
+      canvas.toBlob(b=> resolve(b), "image/jpeg", 0.65);
     };
     reader.readAsDataURL(file);
   });
@@ -316,23 +284,19 @@ async function uploadFree(file){
 }
 fileInput?.addEventListener('change', async (e)=>{
   const f=e.target.files[0]; if(!f||!currentChatId) return;
+  if(f.size > 50*1024*1024){ e.target.value=""; return; }
   const tid="up_"+Date.now();
-  $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tid}" class="msg-row out"><div class="bubble out">Uploading ${escapeHtml(f.name)}... ⏳</div></div>`);
-  $("#chatMessages").scrollTop=$("#chatMessages").scrollHeight;
+  $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tid}" class="msg-row out"><div class="bubble out">⚡ ${escapeHtml(f.name)} uploading...</div></div>`);
+  const boxEl=$("#chatMessages"); boxEl.scrollTop=boxEl.scrollHeight;
   let fileUrl=null;
-  try{
-    if(f.type.startsWith("image/")){
-      fileUrl = await compressImage(f);
-    }else{
-      fileUrl = await uploadFree(f);
-      if(!fileUrl){
-        document.getElementById(tid)?.remove();
-        e.target.value="";
-        return;
-      }
-    }
-  }catch{ document.getElementById(tid)?.remove(); e.target.value=""; return; }
+  if(f.type.startsWith("image/")){
+    const blob = await compressImage(f);
+    fileUrl = await uploadFree(blob);
+  }else{
+    fileUrl = await uploadFree(f);
+  }
   document.getElementById(tid)?.remove();
+  if(!fileUrl){ e.target.value=""; return; }
   const msgType=f.type.startsWith("image/")?"image":f.type.startsWith("video/")?"video":f.type.startsWith("audio/")?"voice":"file";
   await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,fileUrl,fileName:f.name,fileType:f.type,msgType,ts:serverTimestamp(),status:"sent"});
   await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
@@ -351,14 +315,12 @@ micBtn?.addEventListener('click', async ()=>{
       if(!currentChatId || mediaChunks.length===0) return;
       const blob=new Blob(mediaChunks,{type:"audio/webm"});
       const tid="upv_"+Date.now();
-      $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tid}" class="msg-row out"><div class="bubble out">Sending voice... ⏳</div></div>`);
+      $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tid}" class="msg-row out"><div class="bubble out">Sending voice...</div></div>`);
       let url = await uploadFree(blob);
-      if(!url){
-        url = await new Promise(r=>{ const fr=new FileReader(); fr.onload=ev=>r(ev.target.result); fr.readAsDataURL(blob); });
-      }
+      if(!url){ url = URL.createObjectURL(blob); }
       document.getElementById(tid)?.remove();
-      await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice message",fileUrl:url,audioUrl:url,fileName:"Voice message",fileType:"audio/webm",msgType:"voice",ts:serverTimestamp(),status:"sent"});
-      await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice message",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+      await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice",fileUrl:url,audioUrl:url,fileName:"Voice",fileType:"audio/webm",msgType:"voice",ts:serverTimestamp(),status:"sent"});
+      await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
       stream.getTracks().forEach(t=>t.stop()); mediaChunks=[];
     };
     rec.start(100); micBtn.innerHTML='<i class="fas fa-stop" style="color:#ff3b3b"></i>';
