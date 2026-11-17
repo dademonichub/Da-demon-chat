@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, limit, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, limit, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -8,6 +8,9 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+
+// FAST LOAD FROM PHONE CACHE LIKE WHATSAPP
+enableIndexedDbPersistence(db).catch(()=>{});
 
 let currentUser = null; let currentChatId = null; let currentChatWith = null; let isSignup = true;
 let selectedLang = localStorage.getItem("ddchat_lang") || "en";
@@ -39,7 +42,6 @@ async function setPresenceText(el, enText){
   if(transCache[key]){ el.textContent = transCache[key]; } else { try{ const t = await googleTranslate(enText,"en",lang); transCache[key]=t; localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); el.textContent = t; }catch{} }
 }
 const savedLang = localStorage.getItem("ddchat_lang"); if(savedLang && savedLang!=="en") setTimeout(()=>translateApp(savedLang), 600);
-// FIX: Auto translate all new options/icons like old working code
 new MutationObserver(()=>{ const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en") translateApp(l); }).observe(document.body,{childList:true,subtree:true});
 function renderLanguages(filter=""){ const ul = $("#langList"); ul.innerHTML = ""; LANGUAGES.filter(l => l.name.toLowerCase().includes(filter.toLowerCase())).forEach(l => { const li = document.createElement("li"); li.textContent = l.name; if (l.code === selectedLang) li.classList.add("selected"); li.onclick = () => { selectedLang = l.code; $$("#langList li").forEach(x=>x.classList.remove("selected")); li.classList.add("selected"); }; ul.appendChild(li); }); }
 renderLanguages(); $("#langSearch").oninput = (e) => renderLanguages(e.target.value);
@@ -96,7 +98,6 @@ async function markMyMessagesAsRead(){
   }catch{}
 }
 onAuthStateChanged(auth, async (user) => { authChecked = true; if (user) { currentUser = user; const snap = await getDoc(doc(db, "users", user.uid)); if (snap.exists()) { const d = snap.data(); 
-// FIX: OLD ACCOUNTS TURN TO FIRST CHOSEN LANGUAGE
 let myLang = d.lang || localStorage.getItem("ddchat_lang") || "en";
 selectedLang = myLang;
 localStorage.setItem("ddchat_lang", myLang);
@@ -230,7 +231,6 @@ function openChat(chatId,otherUid,passedName=""){
       bubble.innerHTML = fileHtml ? `${fileHtml}<span class="msg-time">${timeStr} ${ticks}</span>` : `<span id="${msgId}" class="msg-text">${escapeHtml(d.text)}</span><span class="msg-time">${timeStr} ${ticks}</span>`;
       row.appendChild(bubble);
       box.appendChild(row);
-      // FIX: AUTO TRANSLATE INCOMING MESSAGE TO MY LANGUAGE
       if(!fileHtml && d.from!==currentUser.uid && d.text && !d.text.startsWith("🎤")){
         const myLang = localStorage.getItem("ddchat_lang")||"en";
         const orig = d.originalLang||"auto";
@@ -251,12 +251,21 @@ function openChat(chatId,otherUid,passedName=""){
 $("#sendBtn").onclick=sendMessage; $("#messageInput").addEventListener("keypress",(e)=>{ if(e.key==="Enter") sendMessage(); });
 async function sendMessage(){
   const text=$("#messageInput").value.trim(); if(!text||!currentChatId) return;
+  const box=$("#chatMessages");
+  // WHATSAPP FAST: show instantly
+  const tempId="txt_"+Date.now();
+  const timeStr=new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true});
+  box.insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out"><span class="msg-text">${escapeHtml(text)}</span><span class="msg-time">${timeStr} <span class="ticks sent"><i class="fas fa-check"></i></span></span></div></div>`);
+  box.scrollTop=box.scrollHeight;
   $("#messageInput").value="";
   const myLang = localStorage.getItem("ddchat_lang")||"en";
   const otherOnline = userCache[currentChatWith]?.isOnline;
   const initialStatus = otherOnline ? "delivered" : "sent";
-  await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text,originalLang:myLang,ts:serverTimestamp(), status:initialStatus});
-  await updateDoc(doc(db,"chats",currentChatId),{lastMsg:text,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+  try{
+    await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text,originalLang:myLang,ts:serverTimestamp(), status:initialStatus});
+    await updateDoc(doc(db,"chats",currentChatId),{lastMsg:text,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+    document.getElementById(tempId)?.remove();
+  }catch(e){ document.getElementById(tempId)?.remove(); alert("Send failed, check network"); }
 }
 $("#chatBack").onclick=()=>{
   if(currentUser){
@@ -311,25 +320,30 @@ async function uploadFree(file){
   }catch{}
   return null;
 }
+// FAST FILE SEND LIKE WHATSAPP - SHOW INSTANTLY
 fileInput?.addEventListener('change', async (e)=>{
   const f=e.target.files[0]; if(!f||!currentChatId) return;
   if(f.size > 50*1024*1024){ alert("File too big - 50MB max"); e.target.value=""; return; }
-  const tid="up_"+Date.now();
-  $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tid}" class="msg-row out"><div class="bubble out">⚡ ${escapeHtml(f.name)} uploading...</div></div>`);
-  const boxEl=$("#chatMessages"); boxEl.scrollTop=boxEl.scrollHeight;
+  const box=$("#chatMessages");
+  const tempId="up_"+Date.now();
+  const localUrl=URL.createObjectURL(f);
+  const isImage=f.type.startsWith("image/");
+  const preview = isImage ? `<img src="${localUrl}" style="max-width:220px;border-radius:12px;display:block">` : `<div style="background:#2a1a6a;padding:12px;border-radius:12px">📎 ${escapeHtml(f.name)}</div>`;
+  const timeStr=new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true});
+  box.insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out">${preview}<span class="msg-time">${timeStr} ⏳</span></div></div>`);
+  box.scrollTop=box.scrollHeight;
+  e.target.value="";
   let fileUrl=null;
-  if(f.type.startsWith("image/")){
-    const blob = await compressImage(f);
-    fileUrl = await uploadFree(blob);
-  }else{
-    fileUrl = await uploadFree(f);
-  }
-  document.getElementById(tid)?.remove();
-  if(!fileUrl){ alert("Upload failed, try smaller file"); e.target.value=""; return; }
+  try{
+    if(isImage){ const blob = await compressImage(f); fileUrl = await uploadFree(blob); }
+    else { fileUrl = await uploadFree(f); }
+  }catch{}
+  URL.revokeObjectURL(localUrl);
+  document.getElementById(tempId)?.remove();
+  if(!fileUrl){ alert("Upload failed, try again"); return; }
   const msgType=f.type.startsWith("image/")?"image":f.type.startsWith("video/")?"video":f.type.startsWith("audio/")?"voice":"file";
   await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,fileUrl,fileName:f.name,fileType:f.type,msgType,ts:serverTimestamp(),status:"sent"});
   await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
-  e.target.value="";
 });
 let recState=null;
 let mediaChunks=[];
@@ -342,13 +356,16 @@ micBtn?.addEventListener('click', async ()=>{
     rec.onstop=async()=>{
       if(!currentChatId || mediaChunks.length===0) return;
       const blob=new Blob(mediaChunks,{type:"audio/webm"});
-      const tid="upv_"+Date.now();
-      $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tid}" class="msg-row out"><div class="bubble out">Sending voice...</div></div>`);
+      const box=$("#chatMessages");
+      const tempId="upv_"+Date.now();
+      const localAudioUrl=URL.createObjectURL(blob);
+      const timeStr=new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true});
+      box.insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out"><audio controls src="${localAudioUrl}" style="width:200px"></audio><span class="msg-time">${timeStr} ⏳</span></div></div>`);
+      box.scrollTop=box.scrollHeight;
       let url = await uploadFree(blob);
-      if(!url){
-        url = await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(blob); });
-      }
-      document.getElementById(tid)?.remove();
+      if(!url){ url = await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(blob); }); }
+      URL.revokeObjectURL(localAudioUrl);
+      document.getElementById(tempId)?.remove();
       await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice",fileUrl:url,audioUrl:url,fileName:"Voice",fileType:"audio/webm",msgType:"voice",ts:serverTimestamp(),status:"sent"});
       await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
       stream.getTracks().forEach(t=>t.stop()); mediaChunks=[];
