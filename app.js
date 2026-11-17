@@ -213,7 +213,7 @@ function openChat(chatId,otherUid,passedName=""){
   }
   listenToOtherPresence(otherUid);
   updateDoc(doc(db,"chats",chatId),{[ `unreadCount.${currentUser.uid}`]:0}).catch(()=>{}); 
-  const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts","desc"), limit(30)); 
+  const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts","desc"), limit(100)); 
   chatUnsub = onSnapshot(q,(snap)=>{ 
     const box=$("#chatMessages"); box.innerHTML=""; 
     const allMsgs=[];
@@ -249,6 +249,8 @@ function openChat(chatId,otherUid,passedName=""){
         updateDoc(doc(db,"chats",currentChatId,"messages",d.id),{status:"read"}).catch(()=>{});
       }
     }); 
+    // render pending local messages that are stuck
+    renderPendingLocal();
     requestAnimationFrame(()=>{ box.scrollTop=box.scrollHeight; });
   }); 
 }
@@ -287,6 +289,8 @@ const stickerBtn = document.getElementById('stickerBtn');
 const chatVideoCall = document.getElementById('chatVideoCall');
 const chatVoiceCall = document.getElementById('chatVoiceCall');
 plusChat?.addEventListener('click', ()=> fileInput?.click());
+
+// === FIXED FAST COMPRESS - 600px fast like WhatsApp ===
 async function compressImage(file) {
   return new Promise((resolve)=>{
     const img = new Image();
@@ -294,7 +298,7 @@ async function compressImage(file) {
     reader.onload = e => { img.src = e.target.result; };
     img.onload = ()=>{
       let w = img.width, h = img.height;
-      const maxDim = 900;
+      const maxDim = 600;
       if(w > maxDim || h > maxDim){
         if(w > h){ h *= maxDim/w; w = maxDim; } 
         else { w *= maxDim/h; h = maxDim; }
@@ -302,17 +306,24 @@ async function compressImage(file) {
       const canvas = document.createElement("canvas");
       canvas.width = w; canvas.height = h;
       canvas.getContext("2d").drawImage(img,0,0,w,h);
-      canvas.toBlob(b=> resolve(b), "image/jpeg", 0.65);
+      canvas.toBlob(b=> resolve(b), "image/jpeg", 0.5);
     };
+    img.onerror = ()=> resolve(file);
     reader.readAsDataURL(file);
   });
 }
-async function uploadFree(file){
+
+// === FIXED UPLOAD - gives blob a name, no more "No content provided" ===
+async function uploadFree(fileOrBlob, originalName){
   try{
-    let fileToUpload = file;
-    let fileNameRaw = file.name || `file-${Date.now()}`;
-    if(!file.name || file.name === 'blob' || fileNameRaw.includes('blob')){
-      fileToUpload = new File([file], fileNameRaw, { type: file.type || 'application/octet-stream' });
+    let fileToUpload = fileOrBlob;
+    let name = originalName || fileOrBlob.name || "";
+    if(!name || name==="blob" || name.includes("blob")){
+      const ext = fileOrBlob.type?.includes("video") ? "mp4" : fileOrBlob.type?.includes("image") ? "jpg" : fileOrBlob.type?.includes("audio") ? "webm" : "file";
+      name = `file-${Date.now()}.${ext}`;
+    }
+    if(fileOrBlob instanceof Blob && !(fileOrBlob instanceof File)){
+      fileToUpload = new File([fileOrBlob], name, { type: fileOrBlob.type || 'application/octet-stream' });
     }
     const finalName = Date.now() + "-" + fileToUpload.name.replace(/\s/g, '_');
     const { error } = await supabase.storage.from('ddchat-files').upload(finalName, fileToUpload, { cacheControl: '3600', upsert: true });
@@ -321,35 +332,137 @@ async function uploadFree(file){
     return data.publicUrl;
   }catch(e){
     console.error("Upload failed", e);
-    alert("Upload failed: "+e.message);
-    return null;
+    throw e;
   }
 }
-// FAST FILE SEND LIKE WHATSAPP - SHOW INSTANTLY
+
+// === STICKY PENDING SYSTEM - message no disappear again ===
+function getPendingKey(){ return `dd_pending_${currentUser?.uid}_${currentChatId}`; }
+function getAllPending(){
+  try{ return JSON.parse(localStorage.getItem(getPendingKey())||"[]"); }catch{ return []; }
+}
+function savePending(arr){ localStorage.setItem(getPendingKey(), JSON.stringify(arr)); }
+function addPendingLocal(item){
+  const arr = getAllPending();
+  arr.push(item);
+  savePending(arr);
+}
+function updatePendingLocal(id, patch){
+  const arr = getAllPending();
+  const idx = arr.findIndex(x=>x.id===id);
+  if(idx>=0){ arr[idx]={...arr[idx], ...patch}; savePending(arr); }
+}
+function removePendingLocal(id){
+  let arr = getAllPending();
+  arr = arr.filter(x=>x.id!==id);
+  savePending(arr);
+}
+function renderPendingLocal(){
+  const box=$("#chatMessages");
+  if(!box || !currentChatId) return;
+  const pendings = getAllPending().filter(p=>p.chatId===currentChatId);
+  pendings.forEach(p=>{
+    if(document.getElementById(p.id)) return;
+    const timeStr = new Date(p.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true});
+    let preview = "";
+    if(p.fileType?.startsWith("image/") && p.localPreview){
+      preview = `<img src="${p.localPreview}" style="max-width:220px;border-radius:12px;display:block;opacity:0.8">`;
+    } else {
+      preview = `<div style="background:#2a1a6a;padding:12px;border-radius:12px">📎 ${escapeHtml(p.fileName)}</div>`;
+    }
+    const statusHtml = p.status==="failed" ? `<span style="color:#ff5252">❌ Failed</span> <button onclick="retryPending('${p.id}')" style="background:#5E35B1;border:none;color:white;padding:4px 10px;border-radius:8px;margin-left:6px">↻ Resend</button>` : `<span>⏳ uploading...</span>`;
+    box.insertAdjacentHTML("beforeend", `<div id="${p.id}" class="msg-row out"><div class="bubble out">${preview}<span class="msg-time">${timeStr} ${statusHtml}</span></div></div>`);
+  });
+}
+window.retryPending = async (pid)=>{
+  const arr = getAllPending();
+  const item = arr.find(x=>x.id===pid);
+  if(!item) return;
+  // we need file blob - if we have it in memory, try again, else ask user to reselect
+  if(item.blobBase64){
+    try{
+      updatePendingLocal(pid, {status:"uploading"});
+      const el=document.getElementById(pid);
+      if(el) el.querySelector(".msg-time").innerHTML=new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true})+" ⏳ uploading...";
+      const blob = await (await fetch(item.blobBase64)).blob();
+      const url = await uploadFree(blob, item.fileName);
+      await addDoc(collection(db,"chats",item.chatId,"messages"),{from:currentUser.uid,text:`📎 ${item.fileName}`,fileUrl:url,fileName:item.fileName,fileType:item.fileType,msgType:item.msgType,ts:serverTimestamp(),status:"sent"});
+      await updateDoc(doc(db,"chats",item.chatId),{lastMsg:`📎 ${item.fileName}`,updated:serverTimestamp(),[ `unreadCount.${item.chatWith}`]: increment(1)});
+      removePendingLocal(pid);
+      document.getElementById(pid)?.remove();
+    }catch(e){
+      updatePendingLocal(pid, {status:"failed"});
+      const el=document.getElementById(pid);
+      if(el) el.querySelector(".msg-time").innerHTML=new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true})+` <span style="color:#ff5252">❌ Failed</span> <button onclick="retryPending('${pid}')" style="background:#5E35B1;border:none;color:white;padding:4px 10px;border-radius:8px;margin-left:6px">↻ Resend</button>`;
+    }
+  } else {
+    alert("File expired from cache, please select file again");
+    removePendingLocal(pid);
+    document.getElementById(pid)?.remove();
+  }
+};
+
+// AUTO RETRY WHEN NETWORK COMES
+window.addEventListener('online', ()=>{
+  const pendings = getAllPending().filter(p=>p.status==="failed");
+  pendings.forEach(p=> retryPending(p.id));
+});
+
+// FAST FILE SEND LIKE WHATSAPP - SHOW INSTANTLY + STICK + ANY SIZE
 fileInput?.addEventListener('change', async (e)=>{
   const f=e.target.files[0]; if(!f||!currentChatId) return;
-  if(f.size > 50*1024*1024){ alert("File too big - 50MB max"); e.target.value=""; return; }
+  // NO SIZE CHECK - ANY SIZE ALLOWED
   const box=$("#chatMessages");
   const tempId="up_"+Date.now();
-  const localUrl=URL.createObjectURL(f);
+  let localUrl=null;
+  try{ localUrl=URL.createObjectURL(f); }catch{}
   const isImage=f.type.startsWith("image/");
-  const preview = isImage ? `<img src="${localUrl}" style="max-width:220px;border-radius:12px;display:block">` : `<div style="background:#2a1a6a;padding:12px;border-radius:12px">📎 ${escapeHtml(f.name)}</div>`;
+  const preview = isImage && localUrl ? `<img src="${localUrl}" style="max-width:220px;border-radius:12px;display:block">` : `<div style="background:#2a1a6a;padding:12px;border-radius:12px">📎 ${escapeHtml(f.name)}</div>`;
   const timeStr=new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true});
-  box.insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out">${preview}<span class="msg-time">${timeStr} ⏳</span></div></div>`);
+  box.insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out">${preview}<span class="msg-time">${timeStr} ⏳ uploading...</span></div></div>`);
   box.scrollTop=box.scrollHeight;
+
+  // save to pending so it sticks even if close app
+  let blobBase64 = null;
+  try{
+    if(f.size < 8*1024*1024){
+      blobBase64 = await new Promise(res=>{
+        const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>res(null); r.readAsDataURL(f);
+      });
+    }
+  }catch{}
+  addPendingLocal({id:tempId, chatId:currentChatId, chatWith:currentChatWith, fileName:f.name, fileType:f.type, msgType:f.type.startsWith("image/")?"image":f.type.startsWith("video/")?"video":f.type.startsWith("audio/")?"voice":"file", ts:Date.now(), status:"uploading", localPreview: isImage ? localUrl : null, blobBase64 });
+
   e.target.value="";
   let fileUrl=null;
   try{
-    if(isImage){ const blob = await compressImage(f); fileUrl = await uploadFree(blob); }
-    else { fileUrl = await uploadFree(f); }
-  }catch{}
-  URL.revokeObjectURL(localUrl);
+    if(isImage){
+      const compressedBlob = await compressImage(f);
+      fileUrl = await uploadFree(compressedBlob, f.name);
+    } else {
+      fileUrl = await uploadFree(f, f.name);
+    }
+  }catch(err){
+    console.error(err);
+    updatePendingLocal(tempId, {status:"failed"});
+    const el=document.getElementById(tempId);
+    if(el) el.querySelector(".msg-time").innerHTML=timeStr+` <span style="color:#ff5252">❌ Failed</span> <button onclick="retryPending('${tempId}')" style="background:#5E35B1;border:none;color:white;padding:4px 10px;border-radius:8px;margin-left:6px">↻ Resend</button>`;
+    if(localUrl) URL.revokeObjectURL(localUrl);
+    return;
+  }
+  if(localUrl) URL.revokeObjectURL(localUrl);
+  removePendingLocal(tempId);
   document.getElementById(tempId)?.remove();
-  if(!fileUrl){ alert("Upload failed, try again"); return; }
+  if(!fileUrl){ return; }
   const msgType=f.type.startsWith("image/")?"image":f.type.startsWith("video/")?"video":f.type.startsWith("audio/")?"voice":"file";
-  await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,fileUrl,fileName:f.name,fileType:f.type,msgType,ts:serverTimestamp(),status:"sent"});
-  await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+  try{
+    await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,fileUrl,fileName:f.name,fileType:f.type,msgType,ts:serverTimestamp(),status:"sent"});
+    await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+  }catch(err){
+    addPendingLocal({id:tempId, chatId:currentChatId, chatWith:currentChatWith, fileName:f.name, fileType:f.type, msgType, ts:Date.now(), status:"failed", blobBase64 });
+  }
 });
+
 let recState=null;
 let mediaChunks=[];
 micBtn?.addEventListener('click', async ()=>{
@@ -365,14 +478,31 @@ micBtn?.addEventListener('click', async ()=>{
       const tempId="upv_"+Date.now();
       const localAudioUrl=URL.createObjectURL(blob);
       const timeStr=new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true});
-      box.insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out"><audio controls src="${localAudioUrl}" style="width:200px"></audio><span class="msg-time">${timeStr} ⏳</span></div></div>`);
+      box.insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out"><audio controls src="${localAudioUrl}" style="width:200px"></audio><span class="msg-time">${timeStr} ⏳ uploading...</span></div></div>`);
       box.scrollTop=box.scrollHeight;
-      let url = await uploadFree(blob);
+      
+      let blobBase64 = null;
+      try{ blobBase64 = await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>res(null); r.readAsDataURL(blob); }); }catch{}
+      addPendingLocal({id:tempId, chatId:currentChatId, chatWith:currentChatWith, fileName:"Voice.webm", fileType:"audio/webm", msgType:"voice", ts:Date.now(), status:"uploading", blobBase64 });
+
+      let url=null;
+      try{ url = await uploadFree(blob, "Voice.webm"); }catch{
+        updatePendingLocal(tempId, {status:"failed"});
+        const el=document.getElementById(tempId);
+        if(el) el.querySelector(".msg-time").innerHTML=timeStr+` <span style="color:#ff5252">❌ Failed</span> <button onclick="retryPending('${tempId}')" style="background:#5E35B1;border:none;color:white;padding:4px 10px;border-radius:8px;margin-left:6px">↻ Resend</button>`;
+        URL.revokeObjectURL(localAudioUrl);
+        return;
+      }
       URL.revokeObjectURL(localAudioUrl);
+      removePendingLocal(tempId);
       document.getElementById(tempId)?.remove();
-      if(!url){ alert("Voice upload failed"); return; }
-      await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice",fileUrl:url,audioUrl:url,fileName:"Voice",fileType:"audio/webm",msgType:"voice",ts:serverTimestamp(),status:"sent"});
-      await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+      if(!url){ return; }
+      try{
+        await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice",fileUrl:url,audioUrl:url,fileName:"Voice.webm",fileType:"audio/webm",msgType:"voice",ts:serverTimestamp(),status:"sent"});
+        await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
+      }catch{
+        addPendingLocal({id:tempId, chatId:currentChatId, chatWith:currentChatWith, fileName:"Voice.webm", fileType:"audio/webm", msgType:"voice", ts:Date.now(), status:"failed", blobBase64 });
+      }
       stream.getTracks().forEach(t=>t.stop()); mediaChunks=[];
     };
     rec.start(100); micBtn.innerHTML='<i class="fas fa-stop" style="color:#ff3b3b"></i>';
