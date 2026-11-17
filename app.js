@@ -162,7 +162,6 @@ window.translateFileText = async function(){
     resEl.innerHTML=`<div style="background:#1e1e1e;padding:12px;border-radius:10px;color:white"><b>Translated (${toLang}):</b><br><div style="margin-top:8px;white-space:pre-wrap">${escapeHtml(translated)}</div></div>`;
   }catch(e){ resEl.innerHTML="Error: "+e.message; }
 };
-// FIXED BIG VIEW - uses this.src so base64 works
 function getFileBubbleHtml(d){
   const fileName = d.fileName || d.text?.replace("📎 ","") || "file";
   let fileUrl = d.fileUrl || d.audioUrl || "";
@@ -286,7 +285,6 @@ const chatVideoCall = document.getElementById('chatVideoCall');
 const chatVoiceCall = document.getElementById('chatVoiceCall');
 plusChat?.addEventListener('click', ()=> fileInput?.click());
 
-// ===== FIXED FILE INPUT - COMPRESS 1.65MB TO 600KB =====
 async function compressImage(file, maxKB = 800) {
   return new Promise((resolve)=>{
     const img = new Image();
@@ -326,7 +324,7 @@ fileInput?.addEventListener('change', async (e)=>{
   let fileUrl="";
   try{
     const form=new FormData(); form.append("reqtype","fileupload"); form.append("fileToUpload", f);
-    const res=await fetch("https://catbox.moe/user/api.php",{method:"POST",body:form});
+    const res=await fetch("https://corsproxy.io/?https://catbox.moe/user/api.php",{method:"POST",body:form});
     fileUrl=(await res.text()).trim();
     if(!fileUrl.startsWith("https://")) throw new Error("catbox fail");
   }catch{
@@ -362,7 +360,7 @@ micBtn?.addEventListener('click', async ()=>{
       let url="";
       try{
         const fd=new FormData(); fd.append("reqtype","fileupload"); fd.append("fileToUpload", blob, `voice_${Date.now()}.webm`);
-        const res=await fetch("https://catbox.moe/user/api.php",{method:"POST",body:fd});
+        const res=await fetch("https://corsproxy.io/?https://catbox.moe/user/api.php",{method:"POST",body:fd});
         url=(await res.text()).trim();
         if(!url.startsWith("https://")) throw new Error("catbox fail");
       }catch{
