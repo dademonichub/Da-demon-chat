@@ -28,31 +28,17 @@ const BAD_FIX = { "Client en Compte":"Compte", "Compte du client":"Compte" };
 const FORCE_FIX = { "QR Code": { "th":"คิวอาร์โค้ด", "zh":"二维码", "fr":"Code QR", "es":"Código QR", "de":"QR-Code" } };
 let transCache = JSON.parse(localStorage.getItem("ddchat_trans_v3") || "{}");
 async function googleTranslate(text, from, to){ if(!text) return text; if(from===to && from!=="auto") return text; try{ const url=`https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`; const r=await fetch(url); const j=await r.json(); let out=""; j[0].forEach(x=>{ if(x[0]) out+=x[0]; }); return out||text; }catch{ return text; } }
-
-// FIXED: Skip chat dynamic areas so translation no break presence
-function getNodes(root){ const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>{ const p=n.parentElement; if(!p) return NodeFilter.FILTER_REJECT; if(["SCRIPT","STYLE"].includes(p.tagName)) return NodeFilter.FILTER_REJECT; if(p.closest("#langList, #chatMessages, #chatList, #chatHeader, #chatTitle, #chatLastSeen, #chatAboutStatus, #profileAvatar, #chatAvatarImg")) return NodeFilter.FILTER_REJECT; return n.nodeValue.trim().length>1?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT; }}); const a=[];let x;while(x=w.nextNode())a.push(x);return a; }
-
-async function translateApp(lang){ if(!lang||lang==="en")return; const nodes=getNodes(document.body); const need=new Map(); nodes.forEach(tn=>{ const p=tn.parentElement; if(!p.dataset.o) p.dataset.o=tn.nodeValue; const orig=p.dataset.o; const key=lang+"::"+orig.trim(); if(transCache[key]){ let t=transCache[key]; if(BAD_FIX[t])t=BAD_FIX[t]; tn.nodeValue=t; } else{ if(!need.has(orig))need.set(orig,[]); need.get(orig).push(tn); } }); $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.closest("#chatInputBar, #chatSearch, #chatMessages")) return; if(!el.dataset.oPh) el.dataset.oPh=el.placeholder; const orig=el.dataset.oPh; const key=lang+"::"+orig.trim(); if(transCache[key]) el.placeholder=transCache[key]; else if(orig.trim()){ if(!need.has(orig))need.set(orig,[]); } }); if(need.size){ for(const o of [...need.keys()]){ let q=o.trim(); if(q==="QR Code" && FORCE_FIX["QR Code"][lang]){ const t=FORCE_FIX["QR Code"][lang]; transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t; (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; }); $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===o) el.placeholder=t; }); continue; } let isAtUser=q.toLowerCase()==="@username"; if(isAtUser) q="username"; let t=await googleTranslate(q,"en",lang); if(isAtUser) t="@"+t; if(BAD_FIX[t])t=BAD_FIX[t]; transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t; (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; }); $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===o) el.placeholder=t; }); } localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); } }
-
-// NEW: Translate status text for any language
+function getNodes(root){ const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>{ const p=n.parentElement; if(!p) return NodeFilter.FILTER_REJECT; if(["SCRIPT","STYLE"].includes(p.tagName)) return NodeFilter.FILTER_REJECT; if(p.closest("#langList, #chatMessages, #chatList, #chatTitle, #chatLastSeen, #chatAboutStatus, #profileAvatar, #chatAvatarImg, #chatAvatarStatus")) return NodeFilter.FILTER_REJECT; return n.nodeValue.trim().length>1?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT; }}); const a=[];let x;while(x=w.nextNode())a.push(x);return a; }
+async function translateApp(lang){ if(!lang||lang==="en")return; const nodes=getNodes(document.body); const need=new Map(); nodes.forEach(tn=>{ const p=tn.parentElement; if(!p.dataset.o) p.dataset.o=tn.nodeValue; const orig=p.dataset.o; const key=lang+"::"+orig.trim(); if(transCache[key]){ let t=transCache[key]; if(BAD_FIX[t])t=BAD_FIX[t]; tn.nodeValue=t; } else{ if(!need.has(orig))need.set(orig,[]); need.get(orig).push(tn); } }); $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.closest("#chatInputBar, #chatSearch")) return; if(!el.dataset.oPh) el.dataset.oPh=el.placeholder; const orig=el.dataset.oPh; const key=lang+"::"+orig.trim(); if(transCache[key]) el.placeholder=transCache[key]; else if(orig.trim()){ if(!need.has(orig))need.set(orig,[]); } }); if(need.size){ for(const o of [...need.keys()]){ let q=o.trim(); if(q==="QR Code" && FORCE_FIX["QR Code"][lang]){ const t=FORCE_FIX["QR Code"][lang]; transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t; (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; }); continue; } let isAtUser=q.toLowerCase()==="@username"; if(isAtUser) q="username"; let t=await googleTranslate(q,"en",lang); if(isAtUser) t="@"+t; if(BAD_FIX[t])t=BAD_FIX[t]; transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t; (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; }); $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===o) el.placeholder=t; }); } localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); } }
 async function setPresenceText(el, enText){
   if(!el) return;
   el.textContent = enText;
   const lang = localStorage.getItem("ddchat_lang") || "en";
   if(lang==="en") return;
   const key = lang+"::"+enText.trim();
-  if(transCache[key]){
-    el.textContent = transCache[key];
-  } else {
-    try{
-      const t = await googleTranslate(enText,"en",lang);
-      transCache[key]=t;
-      localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache));
-      el.textContent = t;
-    }catch{}
-  }
+  if(transCache[key]){ el.textContent = transCache[key]; return; }
+  try{ const t = await googleTranslate(enText,"en",lang); transCache[key]=t; localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); el.textContent = t; }catch{}
 }
-
 const savedLang = localStorage.getItem("ddchat_lang"); if(savedLang && savedLang!=="en") setTimeout(()=>translateApp(savedLang), 600);
 function renderLanguages(filter=""){ const ul = $("#langList"); ul.innerHTML = ""; LANGUAGES.filter(l => l.name.toLowerCase().includes(filter.toLowerCase())).forEach(l => { const li = document.createElement("li"); li.textContent = l.name; if (l.code === selectedLang) li.classList.add("selected"); li.onclick = () => { selectedLang = l.code; $$("#langList li").forEach(x=>x.classList.remove("selected")); li.classList.add("selected"); }; ul.appendChild(li); }); }
 renderLanguages(); $("#langSearch").oninput = (e) => renderLanguages(e.target.value);
@@ -84,7 +70,6 @@ function listenToOtherPresence(otherUid){
     const isAppOnline = u.isOnline === true;
     const isInsideMyChat = u.currentChatWith === currentUser.uid;
     dot.style.display="block";
-    // FIXED: Works for all languages now
     if(aboutEl && u.about){ aboutEl.textContent = u.about; }
     if(isInsideMyChat && isAppOnline){
       setPresenceText(lastSeenEl, "Online");
@@ -109,7 +94,13 @@ async function markMyMessagesAsRead(){
     s.forEach(m=>{ if(m.data().status!=="read") updateDoc(doc(db,"chats",currentChatId,"messages",m.id),{status:"read", read:true}).catch(()=>{}); });
   }catch{}
 }
-onAuthStateChanged(auth, async (user) => { authChecked = true; if (user) { currentUser = user; const snap = await getDoc(doc(db, "users", user.uid)); if (snap.exists()) { const d = snap.data(); $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; const av = $("#profileAvatar"); if(d.photoURL){ av.innerHTML = `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; av.dataset.full = d.photoURL; } else { av.textContent = d.avatar || d.name[0].toUpperCase(); av.dataset.full = ""; } const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.textContent = d.name; if(!d.ddId){ const ddId = Math.floor(10000000 + Math.random()*90000000).toString(); await updateDoc(doc(db,"users",user.uid),{ddId}); } } showScreen("app"); startPresence(); loadChats(); loadGroups(); loadStatus(); loadCalls(); } else { currentUser=null; if(heartbeatInterval) clearInterval(heartbeatInterval); if(presenceUnsub) presenceUnsub(); if(chatUnsub) chatUnsub(); if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen"); else showScreen("language-screen"); } });
+onAuthStateChanged(auth, async (user) => { authChecked = true; if (user) { currentUser = user; const snap = await getDoc(doc(db, "users", user.uid)); if (snap.exists()) { const d = snap.data(); 
+// FIX: restore first chosen language from account
+const userLang = d.lang || localStorage.getItem("ddchat_lang") || "en";
+selectedLang = userLang;
+localStorage.setItem("ddchat_lang", userLang);
+if(userLang !== "en"){ setTimeout(()=>translateApp(userLang), 400); }
+$("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; const av = $("#profileAvatar"); if(d.photoURL){ av.innerHTML = `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; av.dataset.full = d.photoURL; } else { av.textContent = d.avatar || d.name[0].toUpperCase(); av.dataset.full = ""; } const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.textContent = d.name; if(!d.ddId){ const ddId = Math.floor(10000000 + Math.random()*90000000).toString(); await updateDoc(doc(db,"users",user.uid),{ddId}); } } showScreen("app"); startPresence(); loadChats(); loadGroups(); loadStatus(); loadCalls(); } else { currentUser=null; if(heartbeatInterval) clearInterval(heartbeatInterval); if(presenceUnsub) presenceUnsub(); if(chatUnsub) chatUnsub(); if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen"); else showScreen("language-screen"); } });
 $$("#bottomnav button").forEach(btn => { btn.onclick = () => { $$("#bottomnav button").forEach(b => b.classList.remove("active")); btn.classList.add("active"); $$(".page").forEach(p => p.classList.remove("active")); $("#page-" + btn.dataset.page).classList.add("active"); $("#topTitle").textContent = btn.dataset.page === "chats" ? "DDchat" : btn.dataset.page.charAt(0).toUpperCase()+btn.dataset.page.slice(1); if(btn.dataset.page !== "profile"){ const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.style.opacity = "0"; } }; });
 function openFullPhoto(url){ if(!url) return; showModal("Photo",`<div style="position:fixed;inset:0;background:#000;z-index:99999;display:flex;flex-direction:column"><div style="padding:15px;display:flex;align-items:center;background:#111"><button id="photoBackBtn" style="background:#333;border:none;width:42px;height:42px;border-radius:50%;color:white;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer">←</button><span style="color:white;margin-left:15px;font-weight:bold">Profile Photo</span></div><div style="flex:1;display:flex;align-items:center;justify-content:center;background:black;padding:10px"><img src="${url}" style="max-width:100%;max-height:85vh;object-fit:contain;border-radius:8px"/></div></div>`); setTimeout(()=>{ const btn=document.getElementById("photoBackBtn"); if(btn) btn.onclick=()=>$("#modal").classList.add("hidden"); },50); }
 function loadChats(){ if(!currentUser) return; const q = query(collection(db, "chats"), where("members","array-contains",currentUser.uid)); onSnapshot(q, (snap)=>{ const list=$("#chatList"); if(snap.empty){ list.innerHTML="<li style='padding:15px;color:#8696a0'>No chats yet. Search username or DD ID above to start.</li>"; return; } const chatMap = new Map(); snap.forEach(chatDoc=>{ const data=chatDoc.data(); const otherUid=data.members.find(m=>m!==currentUser.uid); if(!otherUid) return; const exist = chatMap.get(otherUid); if(!exist) chatMap.set(otherUid, chatDoc); else { const t1 = exist.data().updated?.toMillis?.()||0; const t2 = data.updated?.toMillis?.()||0; if(t2>t1) chatMap.set(otherUid, chatDoc); } }); list.innerHTML=""; chatMap.forEach((chatDoc, otherUid)=>{ const data=chatDoc.data(); const unread = data.unreadCount?.[currentUser.uid] || 0; const cached = userCache[otherUid]; const name = cached?.name || "DD User"; const letter = cached?.avatar || name[0] || "U"; const photo = cached?.photoURL || ""; const avatarHtml = photo ? `<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></div>` : `<div class="avatar" style="width:48px;height:48px;flex-shrink:0">${letter}</div>`; const li=document.createElement("li"); li.id = "chat_"+otherUid; li.style.display="flex"; li.style.alignItems="center"; li.style.gap="12px"; li.style.padding="12px"; li.style.borderBottom="1px solid rgba(255,255,255,0.06)"; li.style.cursor="pointer"; li.innerHTML=`${avatarHtml}<div style="flex:1;min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</b><small style="color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${escapeHtml(data.lastMsg||"Start chatting")}</small></div>${unread>0?`<span class="unread-badge">${unread}</span>`:''}`; li.onclick=()=>openChat(chatDoc.id,otherUid, cached?.name||""); list.appendChild(li); }); chatMap.forEach(async (chatDoc, otherUid)=>{ if(userCache[otherUid]) return; try{ const usnap = await getDoc(doc(db,"users",otherUid)); if(usnap.exists()){ const u = usnap.data(); userCache[otherUid]=u; const el = document.getElementById("chat_"+otherUid); if(el){ const photo = u.photoURL||""; const letter = u.avatar||u.name?.[0]?.toUpperCase()||"U"; const avatarHtml = photo ? `<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></div>` : `<div class="avatar" style="width:48px;height:48px;flex-shrink:0">${letter}</div>`; const data = chatDoc.data(); el.innerHTML=`${avatarHtml}<div style="flex:1;min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.name||"DD User")}</b><small style="color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${escapeHtml(data.lastMsg||"Start chatting")}</small></div>${data.unreadCount?.[currentUser.uid]?`<span class="unread-badge">${data.unreadCount[currentUser.uid]}</span>`:''}`; el.onclick=()=>openChat(chatDoc.id,otherUid,u.name); } } }catch{} }); }, (err)=>{ console.log("Chats offline:", err.code); }); }
@@ -234,7 +225,26 @@ function openChat(chatId,otherUid,passedName=""){
       }
       const ticks = d.from===currentUser.uid ? `<span class="ticks ${tickClass}">${tickIcon}</span>` : "";
       const fileHtml = getFileBubbleHtml(d);
-      bubble.innerHTML = fileHtml ? `${fileHtml}<span class="msg-time">${timeStr} ${ticks}</span>` : `<span class="msg-text">${escapeHtml(d.text)}</span><span class="msg-time">${timeStr} ${ticks}</span>`;
+      let textToShow = d.text;
+      // Auto-translate incoming messages to my language if needed
+      if(d.from !== currentUser.uid && d.text && !d.text.startsWith("📎") && !d.text.startsWith("🎤")){
+        const myLang = localStorage.getItem("ddchat_lang")||"en";
+        const otherLang = d.originalLang || "auto";
+        if(myLang !== "en" || otherLang !== "en"){
+          const cacheKey = myLang+"::"+d.text.trim();
+          if(transCache[cacheKey]) textToShow = transCache[cacheKey];
+          else {
+            // translate in background
+            googleTranslate(d.text, otherLang, myLang).then(t=>{
+              transCache[cacheKey]=t;
+              localStorage.setItem("ddchat_trans_v3", JSON.stringify(transCache));
+              const el = document.getElementById("msg_"+d.id);
+              if(el) el.textContent = t;
+            });
+          }
+        }
+      }
+      bubble.innerHTML = fileHtml ? `${fileHtml}<span class="msg-time">${timeStr} ${ticks}</span>` : `<span id="msg_${d.id}" class="msg-text">${escapeHtml(textToShow)}</span><span class="msg-time">${timeStr} ${ticks}</span>`;
       row.appendChild(bubble);
       box.appendChild(row);
       if(d.from!==currentUser.uid && currentChatWith===d.from && d.status!=="read"){
@@ -248,9 +258,10 @@ $("#sendBtn").onclick=sendMessage; $("#messageInput").addEventListener("keypress
 async function sendMessage(){
   const text=$("#messageInput").value.trim(); if(!text||!currentChatId) return;
   $("#messageInput").value="";
+  const myLang = localStorage.getItem("ddchat_lang")||"en";
   const otherOnline = userCache[currentChatWith]?.isOnline;
   const initialStatus = otherOnline ? "delivered" : "sent";
-  await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text,ts:serverTimestamp(), status:initialStatus});
+  await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text,originalLang:myLang,ts:serverTimestamp(), status:initialStatus});
   await updateDoc(doc(db,"chats",currentChatId),{lastMsg:text,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
 }
 $("#chatBack").onclick=()=>{
