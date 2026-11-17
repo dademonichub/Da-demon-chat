@@ -27,18 +27,10 @@ const LANGUAGES = [{ code:"en", name:"English" },{ code:"es", name:"Spanish" },{
 const BAD_FIX = { "Client en Compte":"Compte", "Compte du client":"Compte" };
 const FORCE_FIX = { "QR Code": { "th":"คิวอาร์โค้ด", "zh":"二维码", "fr":"Code QR", "es":"Código QR", "de":"QR-Code" } };
 let transCache = JSON.parse(localStorage.getItem("ddchat_trans_v3") || "{}");
-async function googleTranslate(text, from, to){ if(!text) return text; if(from===to && from!=="auto") return text; try{ const url=`https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`; const r=await fetch(url); const j=await r.json(); let out=""; j[0].forEach(x=>{ if(x[0]) out+=x[0]; }); return out||text; }catch{ return text; } }
-function getNodes(root){ const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>{ const p=n.parentElement; if(!p) return NodeFilter.FILTER_REJECT; if(["SCRIPT","STYLE"].includes(p.tagName)) return NodeFilter.FILTER_REJECT; if(p.closest("#langList, #chatMessages, #chatList, #chatTitle, #chatLastSeen, #chatAboutStatus, #profileAvatar, #chatAvatarImg, #chatAvatarStatus")) return NodeFilter.FILTER_REJECT; return n.nodeValue.trim().length>1?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT; }}); const a=[];let x;while(x=w.nextNode())a.push(x);return a; }
-async function translateApp(lang){ if(!lang||lang==="en")return; const nodes=getNodes(document.body); const need=new Map(); nodes.forEach(tn=>{ const p=tn.parentElement; if(!p.dataset.o) p.dataset.o=tn.nodeValue; const orig=p.dataset.o; const key=lang+"::"+orig.trim(); if(transCache[key]){ let t=transCache[key]; if(BAD_FIX[t])t=BAD_FIX[t]; tn.nodeValue=t; } else{ if(!need.has(orig))need.set(orig,[]); need.get(orig).push(tn); } }); $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.closest("#chatInputBar, #chatSearch")) return; if(!el.dataset.oPh) el.dataset.oPh=el.placeholder; const orig=el.dataset.oPh; const key=lang+"::"+orig.trim(); if(transCache[key]) el.placeholder=transCache[key]; else if(orig.trim()){ if(!need.has(orig))need.set(orig,[]); } }); if(need.size){ for(const o of [...need.keys()]){ let q=o.trim(); if(q==="QR Code" && FORCE_FIX["QR Code"][lang]){ const t=FORCE_FIX["QR Code"][lang]; transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t; (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; }); continue; } let isAtUser=q.toLowerCase()==="@username"; if(isAtUser) q="username"; let t=await googleTranslate(q,"en",lang); if(isAtUser) t="@"+t; if(BAD_FIX[t])t=BAD_FIX[t]; transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t; (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; }); $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===o) el.placeholder=t; }); } localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); } }
-async function setPresenceText(el, enText){
-  if(!el) return;
-  el.textContent = enText;
-  const lang = localStorage.getItem("ddchat_lang") || "en";
-  if(lang==="en") return;
-  const key = lang+"::"+enText.trim();
-  if(transCache[key]){ el.textContent = transCache[key]; return; }
-  try{ const t = await googleTranslate(enText,"en",lang); transCache[key]=t; localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); el.textContent = t; }catch{}
-}
+async function googleTranslate(text, from, to){ if(!text) return text; if(from===to) return text; try{ const url=`https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`; const r=await fetch(url); const j=await r.json(); let out=""; j[0].forEach(x=>{ if(x[0]) out+=x[0]; }); return out||text; }catch{ return text; } }
+function getNodes(root){ const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>{ const p=n.parentElement; if(!p) return NodeFilter.FILTER_REJECT; if(["SCRIPT","STYLE"].includes(p.tagName)) return NodeFilter.FILTER_REJECT; if(p.closest("#langList, #chatMessages")) return NodeFilter.FILTER_REJECT; return n.nodeValue.trim().length>1?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT; }}); const a=[];let x;while(x=w.nextNode())a.push(x);return a; }
+async function translateApp(lang){ if(!lang||lang==="en")return; const nodes=getNodes(document.body); const need=new Map(); nodes.forEach(tn=>{ const p=tn.parentElement; if(!p.dataset.o) p.dataset.o=tn.nodeValue; const orig=p.dataset.o; const key=lang+"::"+orig.trim(); if(transCache[key]){ let t=transCache[key]; if(BAD_FIX[t])t=BAD_FIX[t]; tn.nodeValue=t; } else{ if(!need.has(orig))need.set(orig,[]); need.get(orig).push(tn); } }); $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.closest("#chatInputBar")) return; if(!el.dataset.oPh) el.dataset.oPh=el.placeholder; const orig=el.dataset.oPh; const key=lang+"::"+orig.trim(); if(transCache[key]) el.placeholder=transCache[key]; else if(orig.trim()){ if(!need.has(orig))need.set(orig,[]); } }); if(need.size){ for(const o of [...need.keys()]){ let q=o.trim(); if(q==="QR Code" && FORCE_FIX["QR Code"][lang]){ const t=FORCE_FIX["QR Code"][lang]; transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t; (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; }); continue; } let isAtUser=q.toLowerCase()==="@username"; if(isAtUser) q="username"; let t=await googleTranslate(q,"en",lang); if(isAtUser) t="@"+t; if(BAD_FIX[t])t=BAD_FIX[t]; transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t; (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; }); $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===o) el.placeholder=t; }); } localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); } }
+async function setPresenceText(el, enText){ if(!el) return; el.textContent = enText; const lang = localStorage.getItem("ddchat_lang") || "en"; if(lang==="en") return; const key = lang+"::"+enText.trim(); if(transCache[key]){ el.textContent = transCache[key]; } else { try{ const t = await googleTranslate(enText,"en",lang); transCache[key]=t; localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); el.textContent = t; }catch{} } }
 const savedLang = localStorage.getItem("ddchat_lang"); if(savedLang && savedLang!=="en") setTimeout(()=>translateApp(savedLang), 600);
 function renderLanguages(filter=""){ const ul = $("#langList"); ul.innerHTML = ""; LANGUAGES.filter(l => l.name.toLowerCase().includes(filter.toLowerCase())).forEach(l => { const li = document.createElement("li"); li.textContent = l.name; if (l.code === selectedLang) li.classList.add("selected"); li.onclick = () => { selectedLang = l.code; $$("#langList li").forEach(x=>x.classList.remove("selected")); li.classList.add("selected"); }; ul.appendChild(li); }); }
 renderLanguages(); $("#langSearch").oninput = (e) => renderLanguages(e.target.value);
@@ -95,11 +87,12 @@ async function markMyMessagesAsRead(){
   }catch{}
 }
 onAuthStateChanged(auth, async (user) => { authChecked = true; if (user) { currentUser = user; const snap = await getDoc(doc(db, "users", user.uid)); if (snap.exists()) { const d = snap.data(); 
-// FIX: restore first chosen language from account
-const userLang = d.lang || localStorage.getItem("ddchat_lang") || "en";
-selectedLang = userLang;
-localStorage.setItem("ddchat_lang", userLang);
-if(userLang !== "en"){ setTimeout(()=>translateApp(userLang), 400); }
+// FIX 1: APP TURNS TO FIRST CHOSEN LANGUAGE FOR OLD & NEW ACCOUNTS
+let myLang = d.lang || localStorage.getItem("ddchat_lang") || "en";
+selectedLang = myLang;
+localStorage.setItem("ddchat_lang", myLang);
+if(myLang !== "en"){ translateApp(myLang); }
+if(!d.lang){ try{ await updateDoc(doc(db,"users",user.uid),{lang:myLang}); }catch{} }
 $("#profileName").textContent = d.name; $("#profileUsername").textContent = "@"+d.username; const av = $("#profileAvatar"); if(d.photoURL){ av.innerHTML = `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; av.dataset.full = d.photoURL; } else { av.textContent = d.avatar || d.name[0].toUpperCase(); av.dataset.full = ""; } const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.textContent = d.name; if(!d.ddId){ const ddId = Math.floor(10000000 + Math.random()*90000000).toString(); await updateDoc(doc(db,"users",user.uid),{ddId}); } } showScreen("app"); startPresence(); loadChats(); loadGroups(); loadStatus(); loadCalls(); } else { currentUser=null; if(heartbeatInterval) clearInterval(heartbeatInterval); if(presenceUnsub) presenceUnsub(); if(chatUnsub) chatUnsub(); if(localStorage.getItem("ddchat_lang")) showScreen("auth-screen"); else showScreen("language-screen"); } });
 $$("#bottomnav button").forEach(btn => { btn.onclick = () => { $$("#bottomnav button").forEach(b => b.classList.remove("active")); btn.classList.add("active"); $$(".page").forEach(p => p.classList.remove("active")); $("#page-" + btn.dataset.page).classList.add("active"); $("#topTitle").textContent = btn.dataset.page === "chats" ? "DDchat" : btn.dataset.page.charAt(0).toUpperCase()+btn.dataset.page.slice(1); if(btn.dataset.page !== "profile"){ const sticky = document.getElementById("profileStickyName"); if(sticky) sticky.style.opacity = "0"; } }; });
 function openFullPhoto(url){ if(!url) return; showModal("Photo",`<div style="position:fixed;inset:0;background:#000;z-index:99999;display:flex;flex-direction:column"><div style="padding:15px;display:flex;align-items:center;background:#111"><button id="photoBackBtn" style="background:#333;border:none;width:42px;height:42px;border-radius:50%;color:white;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer">←</button><span style="color:white;margin-left:15px;font-weight:bold">Profile Photo</span></div><div style="flex:1;display:flex;align-items:center;justify-content:center;background:black;padding:10px"><img src="${url}" style="max-width:100%;max-height:85vh;object-fit:contain;border-radius:8px"/></div></div>`); setTimeout(()=>{ const btn=document.getElementById("photoBackBtn"); if(btn) btn.onclick=()=>$("#modal").classList.add("hidden"); },50); }
@@ -225,28 +218,20 @@ function openChat(chatId,otherUid,passedName=""){
       }
       const ticks = d.from===currentUser.uid ? `<span class="ticks ${tickClass}">${tickIcon}</span>` : "";
       const fileHtml = getFileBubbleHtml(d);
-      let textToShow = d.text;
-      // Auto-translate incoming messages to my language if needed
-      if(d.from !== currentUser.uid && d.text && !d.text.startsWith("📎") && !d.text.startsWith("🎤")){
-        const myLang = localStorage.getItem("ddchat_lang")||"en";
-        const otherLang = d.originalLang || "auto";
-        if(myLang !== "en" || otherLang !== "en"){
-          const cacheKey = myLang+"::"+d.text.trim();
-          if(transCache[cacheKey]) textToShow = transCache[cacheKey];
-          else {
-            // translate in background
-            googleTranslate(d.text, otherLang, myLang).then(t=>{
-              transCache[cacheKey]=t;
-              localStorage.setItem("ddchat_trans_v3", JSON.stringify(transCache));
-              const el = document.getElementById("msg_"+d.id);
-              if(el) el.textContent = t;
-            });
-          }
-        }
-      }
-      bubble.innerHTML = fileHtml ? `${fileHtml}<span class="msg-time">${timeStr} ${ticks}</span>` : `<span id="msg_${d.id}" class="msg-text">${escapeHtml(textToShow)}</span><span class="msg-time">${timeStr} ${ticks}</span>`;
+      const msgId = "msg_"+d.id;
+      bubble.innerHTML = fileHtml ? `${fileHtml}<span class="msg-time">${timeStr} ${ticks}</span>` : `<span id="${msgId}" class="msg-text">${escapeHtml(d.text)}</span><span class="msg-time">${timeStr} ${ticks}</span>`;
       row.appendChild(bubble);
       box.appendChild(row);
+      // FIX 2: AUTO TRANSLATE INCOMING MESSAGE TO MY LANGUAGE
+      if(!fileHtml && d.from!==currentUser.uid && d.text){
+        const myLang = localStorage.getItem("ddchat_lang")||"en";
+        const orig = d.originalLang || "auto";
+        if(myLang !== orig){
+          const ck = myLang+"::"+d.text.trim();
+          if(transCache[ck]){ const el=document.getElementById(msgId); if(el) el.textContent=transCache[ck]; }
+          else { googleTranslate(d.text, orig, myLang).then(tr=>{ transCache[ck]=tr; localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); const el=document.getElementById(msgId); if(el) el.textContent=tr; }); }
+        }
+      }
       if(d.from!==currentUser.uid && currentChatWith===d.from && d.status!=="read"){
         updateDoc(doc(db,"chats",currentChatId,"messages",d.id),{status:"read"}).catch(()=>{});
       }
@@ -280,7 +265,6 @@ const stickerBtn = document.getElementById('stickerBtn');
 const chatVideoCall = document.getElementById('chatVideoCall');
 const chatVoiceCall = document.getElementById('chatVoiceCall');
 plusChat?.addEventListener('click', ()=> fileInput?.click());
-
 async function compressImage(file) {
   return new Promise((resolve)=>{
     const img = new Image();
@@ -338,7 +322,6 @@ fileInput?.addEventListener('change', async (e)=>{
   await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
   e.target.value="";
 });
-
 let recState=null;
 let mediaChunks=[];
 micBtn?.addEventListener('click', async ()=>{
@@ -364,7 +347,6 @@ micBtn?.addEventListener('click', async ()=>{
     rec.start(100); micBtn.innerHTML='<i class="fas fa-stop" style="color:#ff3b3b"></i>';
   }catch{ alert("Mic permission needed"); }
 });
-
 stickerBtn?.addEventListener('click', ()=>{ if(!currentChatId) return; document.getElementById('messageInput').value+=" 😊"; });
 chatVideoCall?.addEventListener('click', ()=> showModal("Video Call","Video calling soon"));
 chatVoiceCall?.addEventListener('click', ()=> showModal("Voice Call","Voice calling soon"));
