@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, limit, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, limit, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -8,7 +8,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
-enableIndexedDbPersistence(db).catch((err)=>{ if(err.code !== 'failed-precondition') console.log("Offline cache:", err.code); });
 
 let currentUser = null; let currentChatId = null; let currentChatWith = null; let isSignup = true;
 let selectedLang = localStorage.getItem("ddchat_lang") || "en";
@@ -31,7 +30,6 @@ let transCache = JSON.parse(localStorage.getItem("ddchat_trans_v3") || "{}");
 async function googleTranslate(text, from, to){ if(!text) return text; if(from===to && from!=="auto") return text; try{ const url=`https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`; const r=await fetch(url); const j=await r.json(); let out=""; j[0].forEach(x=>{ if(x[0]) out+=x[0]; }); return out||text; }catch{ return text; } }
 function getNodes(root){ const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>{ const p=n.parentElement; if(!p) return NodeFilter.FILTER_REJECT; if(["SCRIPT","STYLE"].includes(p.tagName)) return NodeFilter.FILTER_REJECT; if(p.closest("#langList")) return NodeFilter.FILTER_REJECT; return n.nodeValue.trim().length>1?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT; }}); const a=[];let x;while(x=w.nextNode())a.push(x);return a; }
 async function translateApp(lang){ if(!lang||lang==="en")return; const nodes=getNodes(document.body); const need=new Map(); nodes.forEach(tn=>{ const p=tn.parentElement; if(!p.dataset.o) p.dataset.o=tn.nodeValue; const orig=p.dataset.o; const key=lang+"::"+orig.trim(); if(transCache[key]){ let t=transCache[key]; if(BAD_FIX[t])t=BAD_FIX[t]; tn.nodeValue=t; } else{ if(!need.has(orig))need.set(orig,[]); need.get(orig).push(tn); } }); $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(!el.dataset.oPh) el.dataset.oPh=el.placeholder; const orig=el.dataset.oPh; const key=lang+"::"+orig.trim(); if(transCache[key]) el.placeholder=transCache[key]; else if(orig.trim()){ if(!need.has(orig))need.set(orig,[]); } }); if(need.size){ for(const o of [...need.keys()]){ let q=o.trim(); if(q==="QR Code" && FORCE_FIX["QR Code"][lang]){ const t=FORCE_FIX["QR Code"][lang]; transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t; (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; }); $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===o) el.placeholder=t; }); continue; } let isAtUser=q.toLowerCase()==="@username"; if(isAtUser) q="username"; let t=await googleTranslate(q,"en",lang); if(isAtUser) t="@"+t; if(BAD_FIX[t])t=BAD_FIX[t]; transCache[lang+"::"+o.trim()]=t; transCache[lang+"::"+o]=t; (need.get(o)||[]).forEach(n=>{ if(n.nodeType===3) n.nodeValue=t; }); $$("input[placeholder], textarea[placeholder]").forEach(el=>{ if(el.dataset.oPh===o) el.placeholder=t; }); } localStorage.setItem("ddchat_trans_v3",JSON.stringify(transCache)); } }
-new MutationObserver(()=>{ const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en")translateApp(l); }).observe(document.body,{childList:true,subtree:true});
 const savedLang = localStorage.getItem("ddchat_lang"); if(savedLang && savedLang!=="en") setTimeout(()=>translateApp(savedLang), 600);
 function renderLanguages(filter=""){ const ul = $("#langList"); ul.innerHTML = ""; LANGUAGES.filter(l => l.name.toLowerCase().includes(filter.toLowerCase())).forEach(l => { const li = document.createElement("li"); li.textContent = l.name; if (l.code === selectedLang) li.classList.add("selected"); li.onclick = () => { selectedLang = l.code; $$("#langList li").forEach(x=>x.classList.remove("selected")); li.classList.add("selected"); }; ul.appendChild(li); }); }
 renderLanguages(); $("#langSearch").oninput = (e) => renderLanguages(e.target.value);
@@ -102,9 +100,7 @@ function saveFileGlobal(url, name){
   fetch(url).then(r=>r.blob()).then(b=>{
     const u=URL.createObjectURL(b);
     const a=document.createElement("a"); a.href=u; a.download=name||"file"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500);
-  }).catch(()=>{
-    window.open(url,"_blank");
-  });
+  }).catch(()=>{ window.open(url,"_blank"); });
 }
 window.saveFileGlobal = saveFileGlobal;
 function openFileViewer(url, fileName, type){
@@ -162,12 +158,13 @@ function getFileBubbleHtml(d){
   const fileName = d.fileName || d.text?.replace("📎 ","") || "file";
   let fileUrl = d.fileUrl || d.audioUrl || "";
   if(!fileUrl) return null;
+  if(fileUrl.startsWith("blob:")) return `<div style="padding:8px;background:#3a1a1a;border-radius:8px;color:#ff8a8a;font-size:12px">⚠️ Voice expired - resend please</div>`;
   const safeName = escapeHtml(fileName);
   const isImage = d.fileType?.startsWith("image/") || d.msgType==="image" || fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i);
   const isVideo = d.fileType?.startsWith("video/") || d.msgType==="video";
   const isVoice = d.fileType?.startsWith("audio/") || d.msgType==="voice";
   if(isImage){
-    return `<div><img src="${fileUrl}" loading="lazy" onclick="openFileViewer(this.src,'${safeName}','image')" style="max-width:220px;max-height:220px;border-radius:12px;display:block;object-fit:cover;cursor:pointer"><div style="font-size:11px;color:#bbb;margin-top:4px">Tap to view big + Save</div></div>`;
+    return `<div><img src="${fileUrl}" loading="lazy" onclick="openFileViewer(this.src,'${safeName}','image')" style="max-width:220px;max-height:220px;border-radius:12px;display:block;object-fit:cover;cursor:pointer"></div>`;
   } else if(isVideo){
     return `<div><video src="${fileUrl}" controls preload="metadata" style="max-width:220px;border-radius:12px;display:block"></video><button onclick="openFileViewer('${fileUrl}','${safeName}','video')" style="font-size:12px;margin-top:6px;width:100%;background:#5E35B1;border:none;color:white;padding:10px;border-radius:8px;font-weight:bold">📺 View + Save</button></div>`;
   } else if(isVoice){
@@ -176,7 +173,6 @@ function getFileBubbleHtml(d){
     return `<div onclick="openFileViewer('${fileUrl}','${safeName}','doc')" style="display:flex;align-items:center;gap:10px;background:#2a1a6a;padding:12px;border-radius:12px;cursor:pointer;min-width:180px"><div style="font-size:28px">📄</div><div><div style="font-weight:bold;color:white;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</div><div style="font-size:11px;color:#aaa">Tap to open</div></div></div>`;
   }
 }
-
 function openChat(chatId,otherUid,passedName=""){ 
   if(chatUnsub) chatUnsub();
   currentChatId=chatId; currentChatWith=otherUid; 
@@ -193,7 +189,7 @@ function openChat(chatId,otherUid,passedName=""){
   }
   listenToOtherPresence(otherUid);
   updateDoc(doc(db,"chats",chatId),{[ `unreadCount.${currentUser.uid}`]:0}).catch(()=>{}); 
-  const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts","desc"), limit(60)); 
+  const q=query(collection(db,"chats",chatId,"messages"), orderBy("ts","desc"), limit(30)); 
   chatUnsub = onSnapshot(q,(snap)=>{ 
     const box=$("#chatMessages"); box.innerHTML=""; 
     const allMsgs=[];
@@ -268,15 +264,17 @@ async function compressImage(file) {
   });
 }
 async function uploadFree(file){
-  const fd = new FormData(); fd.append("file", file);
   try{
-    const r = await fetch("https://0x0.st",{method:"POST",body:fd});
+    const fd = new FormData();
+    fd.append("reqtype","fileupload");
+    fd.append("fileToUpload", file);
+    const r = await fetch("https://catbox.moe/user/api.php",{method:"POST",body:fd});
     const t = (await r.text()).trim();
     if(t.startsWith("https://")) return t;
   }catch{}
   try{
-    const fd2 = new FormData(); fd2.append("reqtype","fileupload"); fd2.append("fileToUpload", file);
-    const r2 = await fetch("https://catbox.moe/user/api.php",{method:"POST",body:fd2});
+    const fd2 = new FormData(); fd2.append("file", file);
+    const r2 = await fetch("https://0x0.st",{method:"POST",body:fd2});
     const t2 = (await r2.text()).trim();
     if(t2.startsWith("https://")) return t2;
   }catch{}
@@ -284,7 +282,7 @@ async function uploadFree(file){
 }
 fileInput?.addEventListener('change', async (e)=>{
   const f=e.target.files[0]; if(!f||!currentChatId) return;
-  if(f.size > 50*1024*1024){ e.target.value=""; return; }
+  if(f.size > 50*1024*1024){ alert("File too big - 50MB max"); e.target.value=""; return; }
   const tid="up_"+Date.now();
   $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tid}" class="msg-row out"><div class="bubble out">⚡ ${escapeHtml(f.name)} uploading...</div></div>`);
   const boxEl=$("#chatMessages"); boxEl.scrollTop=boxEl.scrollHeight;
@@ -296,7 +294,7 @@ fileInput?.addEventListener('change', async (e)=>{
     fileUrl = await uploadFree(f);
   }
   document.getElementById(tid)?.remove();
-  if(!fileUrl){ e.target.value=""; return; }
+  if(!fileUrl){ alert("Upload failed, try smaller file"); e.target.value=""; return; }
   const msgType=f.type.startsWith("image/")?"image":f.type.startsWith("video/")?"video":f.type.startsWith("audio/")?"voice":"file";
   await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:`📎 ${f.name}`,fileUrl,fileName:f.name,fileType:f.type,msgType,ts:serverTimestamp(),status:"sent"});
   await updateDoc(doc(db,"chats",currentChatId),{lastMsg:`📎 ${f.name}`,updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
@@ -317,14 +315,17 @@ micBtn?.addEventListener('click', async ()=>{
       const tid="upv_"+Date.now();
       $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tid}" class="msg-row out"><div class="bubble out">Sending voice...</div></div>`);
       let url = await uploadFree(blob);
-      if(!url){ url = URL.createObjectURL(blob); }
+      if(!url){
+        // fallback to base64 for voice only (small, <500KB)
+        url = await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(blob); });
+      }
       document.getElementById(tid)?.remove();
       await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice",fileUrl:url,audioUrl:url,fileName:"Voice",fileType:"audio/webm",msgType:"voice",ts:serverTimestamp(),status:"sent"});
       await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
       stream.getTracks().forEach(t=>t.stop()); mediaChunks=[];
     };
     rec.start(100); micBtn.innerHTML='<i class="fas fa-stop" style="color:#ff3b3b"></i>';
-  }catch{}
+  }catch{ alert("Mic permission needed"); }
 });
 
 stickerBtn?.addEventListener('click', ()=>{ if(!currentChatId) return; document.getElementById('messageInput').value+=" 😊"; });
@@ -463,4 +464,3 @@ if(e.target.closest("#topQrBtn")){
   }
 });
 $$(".settings-list li").forEach(li=>{ li.onclick=()=>{ const s=li.dataset.setting; if(s==="logout"){ signOut(auth); return; } if(s==="account"){ document.getElementById("topEditBtn")?.click(); return; } showModal(li.textContent.trim(),"<p>"+s+" settings coming soon - built.</p>"); }; });
-if("serviceWorker" in navigator){ navigator.serviceWorker.register("service-worker.js"); }
