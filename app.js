@@ -131,7 +131,6 @@ window.translateFileText = async function(){
     resEl.innerHTML=`<div style="background:#1e1e1e;padding:12px;border-radius:10px;color:white"><b>Translated:</b><br>${escapeHtml(translated)}</div>`;
   }catch(e){ resEl.innerHTML="Error: "+e.message; }
 };
-// FIXED BIG VIEW
 function getFileBubbleHtml(d){
   const fileName = d.fileName || d.text?.replace("📎 ","") || "file";
   let fileUrl = d.fileUrl || d.audioUrl || ""; if(!fileUrl) return null;
@@ -205,7 +204,15 @@ async function compressImage(file, maxKB = 700) {
     reader.readAsDataURL(file);
   });
 }
-// ===== YESTERDAY FIX - FREE HOST FOR VIDEO, COMPRESS FOR IMAGE - NO FIREBASE BILL =====
+async function uploadFree(file){
+  try{
+    const fd=new FormData(); fd.append("file", file);
+    const r=await fetch("https://0x0.st",{method:"POST",body:fd});
+    const t=(await r.text()).trim();
+    if(t.startsWith("https://")) return t;
+  }catch(e){ console.log("0x0 fail", e); }
+  return null;
+}
 fileInput?.addEventListener('change', async (e)=>{
   const f=e.target.files[0]; if(!f||!currentChatId) return;
   const tempId="up_"+Date.now();
@@ -216,10 +223,8 @@ fileInput?.addEventListener('change', async (e)=>{
     if(f.type.startsWith("image/")){
       fileUrl = await compressImage(f, 700);
     }else{
-      const fd=new FormData(); fd.append("reqtype","fileupload"); fd.append("fileToUpload", f);
-      const res=await fetch("https://corsproxy.io/?https://catbox.moe/user/api.php",{method:"POST",body:fd});
-      fileUrl=(await res.text()).trim();
-      if(!fileUrl.startsWith("https://")) throw new Error("catbox fail");
+      fileUrl = await uploadFree(f);
+      if(!fileUrl){ throw new Error("free host null"); }
     }
   }catch(err){
     console.log("Upload fail:", err);
@@ -227,8 +232,8 @@ fileInput?.addEventListener('change', async (e)=>{
       fileUrl = await compressImage(f, 700);
     }else{
       document.getElementById(tempId)?.remove();
-      alert("Free host busy, tap again. No Firebase charge.");
-      e.target.value=""; return;
+      e.target.value="";
+      return;
     }
   }
   document.getElementById(tempId)?.remove();
@@ -245,15 +250,9 @@ micBtn?.addEventListener('click', async ()=>{
     const rec=new MediaRecorder(stream); recState=rec; mediaChunks=[]; rec.ondataavailable=e=>mediaChunks.push(e.data);
     rec.onstop=async()=>{
       if(!currentChatId) return;
-      const tempId="upv_"+Date.now(); $("#chatMessages").insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out">Uploading voice... ⏳</div></div>`);
       const blob=new Blob(mediaChunks,{type:"audio/webm"});
-      let url="";
-      try{
-        const fd=new FormData(); fd.append("reqtype","fileupload"); fd.append("fileToUpload", blob, `voice_${Date.now()}.webm`);
-        const res=await fetch("https://corsproxy.io/?https://catbox.moe/user/api.php",{method:"POST",body:fd});
-        url=(await res.text()).trim(); if(!url.startsWith("https://")) throw 0;
-      }catch{ url=await new Promise(r=>{ const reader=new FileReader(); reader.onload=e=>r(e.target.result); reader.readAsDataURL(blob); }); }
-      document.getElementById(tempId)?.remove();
+      let url = await uploadFree(blob);
+      if(!url){ url=await new Promise(r=>{ const reader=new FileReader(); reader.onload=e=>r(e.target.result); reader.readAsDataURL(blob); }); }
       await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice message",fileUrl:url,audioUrl:url,fileName:"Voice message",fileType:"audio/webm",msgType:"voice",ts:serverTimestamp(),status:"sent"});
       await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice message",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
       stream.getTracks().forEach(t=>t.stop()); mediaChunks=[];
