@@ -3,11 +3,15 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, si
 import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, limit, doc, setDoc, getDoc, serverTimestamp, updateDoc, getDocs, increment, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 import { firebaseConfig } from "./firebase-config.js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+const SUPABASE_URL = "https://amvmhvheyuflgwiidtfv.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_fDIFAd7u8gOB7VZYeJQajw_LD5JFzJT";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // FAST LOAD FROM PHONE CACHE LIKE WHATSAPP
 enableIndexedDbPersistence(db).catch(()=>{});
@@ -305,20 +309,21 @@ async function compressImage(file) {
 }
 async function uploadFree(file){
   try{
-    const fd = new FormData();
-    fd.append("reqtype","fileupload");
-    fd.append("fileToUpload", file);
-    const r = await fetch("https://catbox.moe/user/api.php",{method:"POST",body:fd});
-    const t = (await r.text()).trim();
-    if(t.startsWith("https://")) return t;
-  }catch{}
-  try{
-    const fd2 = new FormData(); fd2.append("file", file);
-    const r2 = await fetch("https://0x0.st",{method:"POST",body:fd2});
-    const t2 = (await r2.text()).trim();
-    if(t2.startsWith("https://")) return t2;
-  }catch{}
-  return null;
+    let fileToUpload = file;
+    let fileNameRaw = file.name || `file-${Date.now()}`;
+    if(!file.name || file.name === 'blob' || fileNameRaw.includes('blob')){
+      fileToUpload = new File([file], fileNameRaw, { type: file.type || 'application/octet-stream' });
+    }
+    const finalName = Date.now() + "-" + fileToUpload.name.replace(/\s/g, '_');
+    const { error } = await supabase.storage.from('ddchat-files').upload(finalName, fileToUpload, { cacheControl: '3600', upsert: true });
+    if(error) throw error;
+    const { data } = supabase.storage.from('ddchat-files').getPublicUrl(finalName);
+    return data.publicUrl;
+  }catch(e){
+    console.error("Upload failed", e);
+    alert("Upload failed: "+e.message);
+    return null;
+  }
 }
 // FAST FILE SEND LIKE WHATSAPP - SHOW INSTANTLY
 fileInput?.addEventListener('change', async (e)=>{
@@ -363,9 +368,9 @@ micBtn?.addEventListener('click', async ()=>{
       box.insertAdjacentHTML("beforeend", `<div id="${tempId}" class="msg-row out"><div class="bubble out"><audio controls src="${localAudioUrl}" style="width:200px"></audio><span class="msg-time">${timeStr} ⏳</span></div></div>`);
       box.scrollTop=box.scrollHeight;
       let url = await uploadFree(blob);
-      if(!url){ url = await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(blob); }); }
       URL.revokeObjectURL(localAudioUrl);
       document.getElementById(tempId)?.remove();
+      if(!url){ alert("Voice upload failed"); return; }
       await addDoc(collection(db,"chats",currentChatId,"messages"),{from:currentUser.uid,text:"🎤 Voice",fileUrl:url,audioUrl:url,fileName:"Voice",fileType:"audio/webm",msgType:"voice",ts:serverTimestamp(),status:"sent"});
       await updateDoc(doc(db,"chats",currentChatId),{lastMsg:"🎤 Voice",updated:serverTimestamp(),[ `unreadCount.${currentChatWith}`]: increment(1)});
       stream.getTracks().forEach(t=>t.stop()); mediaChunks=[];
