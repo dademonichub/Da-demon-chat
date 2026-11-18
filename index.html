@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta name="theme-color" content="#5E35B1" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DDchat">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icon-192.png.png">
   <title>DDchat</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="style.css" />
@@ -195,9 +200,45 @@
   </div>
 </div>
 
-<!-- FIX: FILE VIEWER ROOT - AUTO CREATED BY JS TOO -->
 <div id="fileViewerModal" style="display:none"></div>
 
+<!-- INSTALL FOR ALL DEVICES - ADDED ONLY THIS -->
+<div id="installBar" style="display:none; position:fixed; bottom:70px; left:10px; right:10px; background:#1e1250; border:1px solid #5E35B1; padding:12px; border-radius:12px; z-index:9999; text-align:center; box-shadow:0 5px 20px rgba(0,0,0,0.5);">
+  <p style="color:white; font-weight:700; margin:0 0 8px 0;">📲 Install DDchat?</p>
+  <button id="installBtn" style="background:linear-gradient(135deg,#5E35B1,#7C4DFF); color:white; border:none; padding:10px 20px; border-radius:20px; font-weight:700; width:100%;">Install App</button>
+  <button id="installClose" style="background:transparent; color:#aaa; border:none; margin-top:6px; font-size:12px;">Not now</button>
+  <p id="iosHint" style="display:none; color:#a99bff; font-size:12px; margin-top:8px;">iPhone: Tap Share <i class="fas fa-share"></i> → Add to Home Screen</p>
+</div>
+
 <script type="module" src="app.js"></script>
+<script>
+// UNIVERSAL INSTALL
+let deferredPrompt;
+const installBar = document.getElementById('installBar');
+const installBtn = document.getElementById('installBtn');
+const iosHint = document.getElementById('iosHint');
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBar.style.display = 'block';
+});
+installBtn.addEventListener('click', async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const choice = await deferredPrompt.userChoice;
+    if (choice.outcome === 'accepted') installBar.style.display = 'none';
+    deferredPrompt = null;
+  } else {
+    iosHint.style.display = 'block';
+  }
+});
+const isIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+if (isIos && !isStandalone) {
+  setTimeout(()=>{ installBar.style.display='block'; iosHint.style.display='block'; installBtn.innerText='How to Install on iPhone?'; }, 3000);
+}
+document.getElementById('installClose').onclick = () => installBar.style.display='none';
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js'); }
+</script>
 </body>
 </html>
