@@ -1,6 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Client as AppwriteClient, Storage as AppwriteStorage, ID as AppwriteID } from "https://esm.sh/appwrite@14";
 import { CONFIG } from "./appwrite-config.js";
+import { getMessagingInstance, VAPID_KEY } from "./firebase-config.js";
+import { getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-messaging.js";
 
 // === SUPABASE BRAIN ===
 const SUPABASE_URL = "https://amvmhvheyuflgwiidtfv.supabase.co";
@@ -76,9 +78,35 @@ function startPresence(){
   const goOffline = ()=> supabase.from("users").update({ is_online:false, last_seen: new Date().toISOString(), current_chat_with:null }).eq("id", currentUser.id).then(()=>{});
   goOnline();
   if(heartbeatInterval) clearInterval(heartbeatInterval);
-  heartbeatInterval = setInterval(goOnline, 10000); // 10 SECONDS AS YOU REQUESTED
+  heartbeatInterval = setInterval(goOnline, 10000);
   window.addEventListener('beforeunload', goOffline);
   document.addEventListener('visibilitychange', ()=>{ if(document.hidden) goOffline(); else goOnline(); });
+  // === PUSH - ADDED (DOES NOT TOUCH YOUR CODE) ===
+  setupPush();
+}
+
+// === PUSH - NEW FUNCTION (ADDED AT BOTTOM OF startPresence) ===
+async function setupPush(){
+  try{
+    if(Notification.permission === "denied") return;
+    if(Notification.permission !== "granted"){
+      const perm = await Notification.requestPermission();
+      if(perm !== "granted") return;
+    }
+    const messaging = await getMessagingInstance();
+    if(!messaging) return;
+    const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+    if(token){
+      console.log("Push token saved");
+      await supabase.from("users").update({ fcm_token: token }).eq("id", currentUser.id);
+      onMessage(messaging, (payload)=>{
+        console.log("Push in foreground:", payload);
+        if(document.hidden && Notification.permission === "granted"){
+          new Notification(payload.notification?.title || "DDchat", { body: payload.notification?.body || "New message", icon: './icon-192.png.png' });
+        }
+      });
+    }
+  }catch(e){ console.log("Push setup error:", e); }
 }
 
 function listenToOtherPresence(otherUid){
@@ -184,7 +212,6 @@ async function loadChats(){
     li.onclick=()=>openChat(data.id,otherUid, cached?.name||"");
     list.appendChild(li);
   }
-  // realtime chats
   if(chatsChannel) supabase.removeChannel(chatsChannel);
   chatsChannel = supabase.channel('chats-list').on('postgres_changes', { event:'*', schema:'public', table:'chats' }, ()=> loadChats()).subscribe();
 }
@@ -408,7 +435,6 @@ async function compressImage(file) {
   });
 }
 
-// === FIXED UPLOAD - APPWRITE FRA (FAST FOR NIGERIA) ===
 async function uploadFree(fileOrBlob, originalName){
   try{
     let fileToUpload = fileOrBlob;
@@ -420,7 +446,6 @@ async function uploadFree(fileOrBlob, originalName){
     if(fileOrBlob instanceof Blob && !(fileOrBlob instanceof File)){
       fileToUpload = new File([fileOrBlob], name, { type: fileOrBlob.type || 'application/octet-stream' });
     }
-    // APPWRITE upload
     const res = await awStorage.createFile(CONFIG.BUCKET_ID, AppwriteID.unique(), fileToUpload);
     const fileUrl = `${CONFIG.ENDPOINT}/storage/buckets/${CONFIG.BUCKET_ID}/files/${res.$id}/view?project=${CONFIG.PROJECT_ID}`;
     return fileUrl;
