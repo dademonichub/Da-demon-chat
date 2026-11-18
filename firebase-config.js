@@ -13,7 +13,7 @@ export const firebaseConfig = {
 };
 
 // REPLACE THIS WITH YOUR VAPID KEY FROM FIREBASE CONSOLE!
-export const VAPID_KEY = "PASTE_YOUR_VAPID_KEY_HERE_STARTS_WITH_B";
+export const VAPID_KEY = "BP07uC3ITEpdObX22UzXwz4S3FORZt7w-YZHIfJuXYbiUHA1QsXhN85oHl-ZVGrY5qqrkO39HgbiUY3VMP78x18";
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
