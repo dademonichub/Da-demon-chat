@@ -27,13 +27,11 @@ self.addEventListener("fetch", e => {
   e.respondWith(
     fetch(e.request)
       .then(res => {
-        // Online - save copy to cache
         const clone = res.clone();
         caches.open(CACHE).then(cache => cache.put(e.request, clone));
         return res;
       })
       .catch(() => {
-        // Offline - get from cache
         return caches.match(e.request).then(cached => cached || caches.match("./index.html"));
       })
   );
