@@ -1,4 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
+import { getMessaging, isSupported } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-messaging.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-auth.js";
 
 export const firebaseConfig = {
@@ -11,10 +12,32 @@ export const firebaseConfig = {
   measurementId: "G-EKWK4L88Y4"
 };
 
+// REPLACE THIS WITH YOUR VAPID KEY FROM FIREBASE CONSOLE!
+export const VAPID_KEY = "PASTE_YOUR_VAPID_KEY_HERE_STARTS_WITH_B";
+
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-// Helper to show clean error messages without Firebase branding
+// Lazy messaging - only loads when needed, so app stays FAST!
+let messagingInstance = null;
+
+export async function getMessagingInstance() {
+  if (messagingInstance) return messagingInstance;
+  try {
+    const supported = await isSupported();
+    if (!supported) {
+      console.log("Push not supported on this device");
+      return null;
+    }
+    const { getMessaging } = await import("https://www.gstatic.com/firebasejs/10.0.0/firebase-messaging.js");
+    messagingInstance = getMessaging(app);
+    return messagingInstance;
+  } catch (e) {
+    console.log("Messaging not supported:", e);
+    return null;
+  }
+}
+
 export function getFriendlyAuthError(error) {
   const code = error.code;
   if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
@@ -32,6 +55,5 @@ export function getFriendlyAuthError(error) {
   if (code === 'auth/network-request-failed') {
     return "Network error. Please check your internet connection.";
   }
-  // Default fallback
   return "Something went wrong. Please try again.";
 }
