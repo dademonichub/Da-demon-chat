@@ -14,24 +14,24 @@ export const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-// NEW: Helper to hide Firebase name
+// Helper to show clean error messages without Firebase branding
 export function getFriendlyAuthError(error) {
   const code = error.code;
   if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-    return "Password no correct. Try again.";
+    return "Incorrect password. Please try again.";
   }
   if (code === 'auth/email-already-in-use') {
-    return "This email don already register. Try login.";
+    return "This email is already registered. Please log in instead.";
   }
   if (code === 'auth/user-not-found' || code === 'auth/invalid-email') {
-    return "No account with this email.";
+    return "No account found with this email address.";
   }
   if (code === 'auth/weak-password') {
-    return "Password too short. Use 6+ characters.";
+    return "Password is too weak. Please use at least 6 characters.";
   }
   if (code === 'auth/network-request-failed') {
-    return "Network slow. Check internet.";
+    return "Network error. Please check your internet connection.";
   }
-  // Default - no Firebase word
-  return "Something no work. Try again.";
+  // Default fallback
+  return "Something went wrong. Please try again.";
 }
