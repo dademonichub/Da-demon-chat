@@ -238,7 +238,7 @@ if (isIos && !isStandalone) {
   setTimeout(()=>{ installBar.style.display='block'; iosHint.style.display='block'; installBtn.innerText='How to Install on iPhone?'; }, 3000);
 }
 document.getElementById('installClose').onclick = () => installBar.style.display='none';
-if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js'); }
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('service-worker.js'); }
 </script>
 </body>
 </html>
