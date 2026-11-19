@@ -1,4 +1,5 @@
-const CACHE = "ddchat-v2";
+Fix this one and send me the full code to paste without changing or touching other codes 
+const CACHE = "ddchat-v1";
 
 // === FIREBASE FOR PUSH (Background) ===
 importScripts('https://www.gstatic.com/firebasejs/10.0.0/firebase-app-compat.js');
@@ -34,14 +35,7 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(clients.openWindow('./'));
 });
 
-// === ADDED LINE 1: AUTO UPDATE TRIGGER ===
-self.addEventListener("message", (event) => {
-  if (event.data === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
-});
-
-// === YOUR PWA CACHE - FIXED FOR IPHONE LANGUAGE ===
+// === YOUR PWA CACHE - UNTOUCHED FAST ===
 self.addEventListener("install", e => {
   e.waitUntil(
     caches.open(CACHE).then(cache => 
@@ -50,9 +44,6 @@ self.addEventListener("install", e => {
         "./index.html",
         "./manifest.json",
         "./style.css",
-        "./app.js",
-        "./appwrite-config.js",
-        "./firebase-config.js",
         "./icon-192.png.png",
         "./icon-512.png.png"
       ])
@@ -69,35 +60,12 @@ self.addEventListener("activate", e => {
 });
 
 self.addEventListener("fetch", e => {
-  const url = e.request.url;
-
-  // Don't cache external APIs - let them load fresh (this fixes language)
-  if (
-    url.includes('fcm') ||
-    url.includes('firebase') ||
-    url.includes('translate.googleapis') ||
-    url.includes('supabase') ||
-    url.includes('appwrite') ||
-    url.includes('esm.sh') ||
-    url.includes('qrserver') ||
-    url.includes('tesseract') ||
-    url.includes('jsqr') ||
-    url.includes('gstatic')
-  ) {
-    return;
-  }
-
-  if (e.request.method !== 'GET') return;
-
+  if (e.request.url.includes('fcm') || e.request.url.includes('firebase')) return;
   e.respondWith(
-    // === ADDED LINE 2: FORCE FRESH UPDATE FROM SERVER ===
-    fetch(e.request, { cache: 'no-store' })
+    fetch(e.request)
       .then(res => {
-        // Only cache successful same-origin files
-        if (res.ok && e.request.url.startsWith(self.location.origin)) {
-          const clone = res.clone();
-          caches.open(CACHE).then(cache => cache.put(e.request, clone));
-        }
+        const clone = res.clone();
+        caches.open(CACHE).then(cache => cache.put(e.request, clone));
         return res;
       })
       .catch(() => {
