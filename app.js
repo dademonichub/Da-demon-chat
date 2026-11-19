@@ -87,13 +87,13 @@ function formatLastSeen(iso){
 }
 function startPresence(){
   if(!currentUser) return;
-  const goOnline = ()=> supabase.from("users").update({ is_online:true, last_seen: new Date().toISOString(), current_chat_with: currentChatWith || null }).eq("id", currentUser.id).then(()=>{});
+  const goOnline = ()=> supabase.from("users").update({ is_online:true, current_chat_with: currentChatWith || null }).eq("id", currentUser.id).then(()=>{});
   const goOffline = ()=> supabase.from("users").update({ is_online:false, last_seen: new Date().toISOString(), current_chat_with:null }).eq("id", currentUser.id).then(()=>{});
   goOnline();
   if(heartbeatInterval) clearInterval(heartbeatInterval);
   heartbeatInterval = setInterval(goOnline, 10000);
   window.addEventListener('beforeunload', goOffline);
-  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) goOffline(); else goOnline(); });
+}
   // === PUSH - ADDED (DOES NOT TOUCH YOUR CODE) ===
   setupPush();
 }
