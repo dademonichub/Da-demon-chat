@@ -45,7 +45,7 @@ async function setPresenceText(el, enText){
   try{ 
   const t = await googleTranslate(enText,"en",lang); 
   el.textContent = t; 
-}catch{}
+}catch{}}
 const savedLang = localStorage.getItem("ddchat_lang"); if(savedLang && savedLang!=="en") setTimeout(()=>translateApp(savedLang), 600);
 new MutationObserver(()=>{ const l=localStorage.getItem("ddchat_lang"); if(l&&l!=="en") translateApp(l); }).observe(document.body,{childList:true,subtree:true});
 function renderLanguages(filter=""){ const ul = $("#langList"); ul.innerHTML = ""; LANGUAGES.filter(l => l.name.toLowerCase().includes(filter.toLowerCase())).forEach(l => { const li = document.createElement("li"); li.textContent = l.name; if (l.code === selectedLang) li.classList.add("selected"); li.onclick = () => { selectedLang = l.code; $$("#langList li").forEach(x=>x.classList.remove("selected")); li.classList.add("selected"); }; ul.appendChild(li); }); }
