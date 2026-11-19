@@ -34,6 +34,13 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(clients.openWindow('./'));
 });
 
+// === ADDED LINE 1: AUTO UPDATE TRIGGER ===
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 // === YOUR PWA CACHE - FIXED FOR IPHONE LANGUAGE ===
 self.addEventListener("install", e => {
   e.waitUntil(
@@ -83,7 +90,8 @@ self.addEventListener("fetch", e => {
   if (e.request.method !== 'GET') return;
 
   e.respondWith(
-    fetch(e.request)
+    // === ADDED LINE 2: FORCE FRESH UPDATE FROM SERVER ===
+    fetch(e.request, { cache: 'no-store' })
       .then(res => {
         // Only cache successful same-origin files
         if (res.ok && e.request.url.startsWith(self.location.origin)) {
