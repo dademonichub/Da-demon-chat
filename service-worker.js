@@ -1,4 +1,4 @@
-const CACHE = "ddchat-v1";
+const CACHE = "ddchat-v2";
 
 // === FIREBASE FOR PUSH (Background) ===
 importScripts('https://www.gstatic.com/firebasejs/10.0.0/firebase-app-compat.js');
@@ -34,7 +34,7 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(clients.openWindow('./'));
 });
 
-// === YOUR PWA CACHE - UNTOUCHED FAST ===
+// === YOUR PWA CACHE - FIXED FOR IPHONE LANGUAGE ===
 self.addEventListener("install", e => {
   e.waitUntil(
     caches.open(CACHE).then(cache => 
@@ -43,6 +43,9 @@ self.addEventListener("install", e => {
         "./index.html",
         "./manifest.json",
         "./style.css",
+        "./app.js",
+        "./appwrite-config.js",
+        "./firebase-config.js",
         "./icon-192.png.png",
         "./icon-512.png.png"
       ])
@@ -59,12 +62,34 @@ self.addEventListener("activate", e => {
 });
 
 self.addEventListener("fetch", e => {
-  if (e.request.url.includes('fcm') || e.request.url.includes('firebase')) return;
+  const url = e.request.url;
+
+  // Don't cache external APIs - let them load fresh (this fixes language)
+  if (
+    url.includes('fcm') ||
+    url.includes('firebase') ||
+    url.includes('translate.googleapis') ||
+    url.includes('supabase') ||
+    url.includes('appwrite') ||
+    url.includes('esm.sh') ||
+    url.includes('qrserver') ||
+    url.includes('tesseract') ||
+    url.includes('jsqr') ||
+    url.includes('gstatic')
+  ) {
+    return;
+  }
+
+  if (e.request.method !== 'GET') return;
+
   e.respondWith(
     fetch(e.request)
       .then(res => {
-        const clone = res.clone();
-        caches.open(CACHE).then(cache => cache.put(e.request, clone));
+        // Only cache successful same-origin files
+        if (res.ok && e.request.url.startsWith(self.location.origin)) {
+          const clone = res.clone();
+          caches.open(CACHE).then(cache => cache.put(e.request, clone));
+        }
         return res;
       })
       .catch(() => {
