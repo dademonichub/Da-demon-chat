@@ -1,4 +1,4 @@
-const CACHE = "ddchat-v1";
+const CACHE = "ddchat-v3";
 
 // === FIREBASE FOR PUSH (Background) ===
 importScripts('https://www.gstatic.com/firebasejs/10.0.0/firebase-app-compat.js');
@@ -34,7 +34,12 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(clients.openWindow('./'));
 });
 
-// === YOUR PWA CACHE - UNTOUCHED FAST ===
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("install", e => {
   e.waitUntil(
     caches.open(CACHE).then(cache => 
@@ -43,6 +48,9 @@ self.addEventListener("install", e => {
         "./index.html",
         "./manifest.json",
         "./style.css",
+        "./app.js",
+        "./appwrite-config.js",
+        "./firebase-config.js",
         "./icon-192.png.png",
         "./icon-512.png.png"
       ])
@@ -59,12 +67,29 @@ self.addEventListener("activate", e => {
 });
 
 self.addEventListener("fetch", e => {
-  if (e.request.url.includes('fcm') || e.request.url.includes('firebase')) return;
+  const url = e.request.url;
+  if (
+    url.includes('fcm') ||
+    url.includes('firebase') ||
+    url.includes('translate.googleapis') ||
+    url.includes('supabase') ||
+    url.includes('appwrite') ||
+    url.includes('esm.sh') ||
+    url.includes('qrserver') ||
+    url.includes('tesseract') ||
+    url.includes('jsqr') ||
+    url.includes('gstatic')
+  ) {
+    return;
+  }
+  if (e.request.method !== 'GET') return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-store' })
       .then(res => {
-        const clone = res.clone();
-        caches.open(CACHE).then(cache => cache.put(e.request, clone));
+        if (res.ok && e.request.url.startsWith(self.location.origin)) {
+          const clone = res.clone();
+          caches.open(CACHE).then(cache => cache.put(e.request, clone));
+        }
         return res;
       })
       .catch(() => {
