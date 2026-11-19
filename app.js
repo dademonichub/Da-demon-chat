@@ -130,21 +130,24 @@ function listenToOtherPresence(otherUid){
       if(!u) return;
       userCache[otherUid] = {...userCache[otherUid], ...u, photoURL: u.photo_url, avatar: u.avatar, name: u.name, about: u.about, isOnline: u.is_online, lastSeen: u.last_seen ? { toDate:()=>new Date(u.last_seen) } : null, currentChatWith: u.current_chat_with };
       const lastSeenEl = $("#chatLastSeen");
-      const dot = $("#chatAvatarStatus");
-      const aboutEl = $("#chatAboutStatus");
-      if(!lastSeenEl || !dot) return;
-      const isAppOnline = u.is_online === true;
-      const isInsideMyChat = u.current_chat_with === currentUser.id;
-      dot.style.display="block";
-      if(aboutEl && u.about){ aboutEl.textContent = u.about; }
-      if(isInsideMyChat && isAppOnline){
-            setPresenceText(lastSeenEl, "Online", "online");
-    dot.className = "online";
-  } else {
-    const timeStr = formatLastSeen(u.last_seen);
-    setPresenceText(lastSeenEl, timeStr, "lastSeen");
-    dot.className = "offline";
-  }
+const dot = $("#chatAvatarStatus");
+const aboutEl = $("#chatAboutStatus");
+if(!lastSeenEl || !dot) return;
+const isAppOnline = u.is_online === true;
+const isInsideMyChat = u.current_chat_with === currentUser.id;
+dot.style.display="block";
+if(aboutEl && u.about){ aboutEl.textContent = u.about; }
+if(isAppOnline){
+  dot.className = "online";
+} else {
+  dot.className = "offline";
+}
+if(isInsideMyChat && isAppOnline){
+  setPresenceText(lastSeenEl, "Online", "online");
+} else {
+  const timeStr = formatLastSeen(u.last_seen);
+  setPresenceText(lastSeenEl, timeStr, "lastSeen");
+}
     }).subscribe();
 }
 
