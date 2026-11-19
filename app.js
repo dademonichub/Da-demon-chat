@@ -74,6 +74,17 @@ $("#authBtn").onclick = async () => {
 };
 $("#forgotLink").onclick = (e)=>{ e.preventDefault(); showModal("Reset","Contact support: flatking43@gmail.com"); };
 
+function formatLastSeen(iso){
+  if(!iso) return "Offline";
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffMins = Math.floor(diffMs/60000);
+  if(diffMins < 1) return "Just now";
+  if(diffMins < 60) return diffMins + "m ago";
+  if(diffMins < 1440) return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  return d.toLocaleDateString();
+}
 function startPresence(){
   if(!currentUser) return;
   const goOnline = ()=> supabase.from("users").update({ is_online:true, last_seen: new Date().toISOString(), current_chat_with: currentChatWith || null }).eq("id", currentUser.id).then(()=>{});
