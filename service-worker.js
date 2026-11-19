@@ -1,4 +1,3 @@
-Fix this one and send me the full code to paste without changing or touching other codes 
 const CACHE = "ddchat-v1";
 
 // === FIREBASE FOR PUSH (Background) ===
