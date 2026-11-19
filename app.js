@@ -138,18 +138,13 @@ function listenToOtherPresence(otherUid){
       dot.style.display="block";
       if(aboutEl && u.about){ aboutEl.textContent = u.about; }
       if(isInsideMyChat && isAppOnline){
-        setPresenceText(lastSeenEl, "Online");
-        dot.className = "online";
-        markMyMessagesAsRead();
-      } else if(isAppOnline){
-        setPresenceText(lastSeenEl, "Online");
-        dot.className = "online";
-      } else {
-        const last = u.last_seen ? new Date(u.last_seen) : new Date();
-        const timeStr = last.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:true});
-        setPresenceText(lastSeenEl, `last seen today at ${timeStr}`);
-        dot.className = "offline";
-      }
+            setPresenceText(lastSeenEl, "Online", "online");
+    dot.className = "online";
+  } else {
+    const timeStr = formatLastSeen(u.last_seen);
+    setPresenceText(lastSeenEl, timeStr, "lastSeen");
+    dot.className = "offline";
+  }
     }).subscribe();
 }
 
